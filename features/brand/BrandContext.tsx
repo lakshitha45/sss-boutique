@@ -126,15 +126,15 @@ const DEFAULT_BRAND_SETTINGS: BrandSettings = {
   showPaymentIcons: true,
 
   // Contact
-  phone: "+91 98765 43210",
+  phone: "+91 79040 04470",
   email: "concierge@sssboutique.com",
   address: "42 Fashion Avenue, Mumbai 400001",
-  whatsapp: "+91 98765 43210",
+  whatsapp: "+91 79040 04470",
   businessHours: "Mon-Sat: 10am - 8pm",
 
   // Social Media
-  instagram: "https://instagram.com/sssboutique",
-  facebook: "https://facebook.com/sssboutique",
+  instagram: "https://www.instagram.com/sss_boutique_for_u",
+  facebook: "",
   youtube: "",
   pinterest: "",
 };
@@ -240,7 +240,22 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as Partial<BrandSettings>;
+        if (parsed.facebook === "https://facebook.com/sssboutique") {
+          parsed.facebook = "";
+        }
+        if (parsed.instagram === "https://instagram.com/sssboutique") {
+          parsed.instagram = "https://www.instagram.com/sss_boutique_for_u";
+        }
+        if (parsed.phone === "+91 98765 43210") {
+          parsed.phone = "+91 79040 04470";
+        }
+        if (parsed.whatsapp === "+91 98765 43210") {
+          parsed.whatsapp = "+91 79040 04470";
+        }
         const merged = { ...DEFAULT_BRAND_SETTINGS, ...parsed };
+        // Save cleaned version
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        
         setTimeout(() => {
           setBrand(merged);
         }, 0);
