@@ -70,3 +70,70 @@ ALTER TABLE IF EXISTS public.categories
   ADD COLUMN IF NOT EXISTS meta_title VARCHAR(255),
   ADD COLUMN IF NOT EXISTS meta_description TEXT;
 
+-- 9. Row Level Security policies for categories, products, images and variants
+ALTER TABLE IF EXISTS public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.product_images ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.product_variants ENABLE ROW LEVEL SECURITY;
+
+-- Categories RLS policies
+DROP POLICY IF EXISTS "Allow public read categories" ON public.categories;
+CREATE POLICY "Allow public read categories" ON public.categories
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow admin manage categories" ON public.categories;
+CREATE POLICY "Allow admin manage categories" ON public.categories
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid()
+            AND (role = 'admin'::public.user_role_type OR role = 'superadmin'::public.user_role_type OR role = 'super_admin'::public.user_role_type)
+        )
+    );
+
+-- Products RLS policies
+DROP POLICY IF EXISTS "Allow public read products" ON public.products;
+CREATE POLICY "Allow public read products" ON public.products
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow admin manage products" ON public.products;
+CREATE POLICY "Allow admin manage products" ON public.products
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid()
+            AND (role = 'admin'::public.user_role_type OR role = 'superadmin'::public.user_role_type OR role = 'super_admin'::public.user_role_type)
+        )
+    );
+
+-- Product Images RLS policies
+DROP POLICY IF EXISTS "Allow public read product_images" ON public.product_images;
+CREATE POLICY "Allow public read product_images" ON public.product_images
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow admin manage product_images" ON public.product_images;
+CREATE POLICY "Allow admin manage product_images" ON public.product_images
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid()
+            AND (role = 'admin'::public.user_role_type OR role = 'superadmin'::public.user_role_type OR role = 'super_admin'::public.user_role_type)
+        )
+    );
+
+-- Product Variants RLS policies
+DROP POLICY IF EXISTS "Allow public read product_variants" ON public.product_variants;
+CREATE POLICY "Allow public read product_variants" ON public.product_variants
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow admin manage product_variants" ON public.product_variants;
+CREATE POLICY "Allow admin manage product_variants" ON public.product_variants
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid()
+            AND (role = 'admin'::public.user_role_type OR role = 'superadmin'::public.user_role_type OR role = 'super_admin'::public.user_role_type)
+        )
+    );
+
+
