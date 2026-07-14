@@ -19,7 +19,7 @@ export const Footer: React.FC = () => {
             <img
               src={brand.logoUrl}
               alt={brand.brandName}
-              className="h-10 w-auto object-contain"
+              className="h-20 w-auto object-contain scale-[1.3] transform origin-left overflow-visible"
               onError={(e) => {
                 e.currentTarget.style.display = "none";
                 const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
@@ -143,34 +143,25 @@ export const Footer: React.FC = () => {
             </ul>
           </div>
 
-          {/* Newsletter Form */}
+          {/* Shop Categories */}
           <div className="space-y-4">
             <h4 className="text-[11px] font-bold text-accent uppercase tracking-[0.2em]">
-              Newsletter
+              Shop Categories
             </h4>
-            {brand.showNewsletter ? (
-              <>
-                <p className="text-zinc-500 text-[11px] leading-relaxed">
-                  Subscribe to receive private collection arrivals and exclusive boutique events invitation.
-                </p>
-                <form className="flex" onSubmit={(e) => e.preventDefault()}>
-                  <input
-                    type="email"
-                    placeholder="YOUR EMAIL"
-                    className="bg-zinc-900 border border-zinc-800 rounded-none px-3 py-2 text-[10px] w-full text-white placeholder-zinc-600 focus:outline-none focus:border-accent tracking-widest font-poppins"
-                    required
-                  />
-                  <button
-                    type="submit"
-                    className="bg-accent text-foreground hover:bg-accent-hover font-semibold px-4 transition duration-300 uppercase tracking-wider text-[10px]"
-                  >
-                    JOIN
-                  </button>
-                </form>
-              </>
-            ) : (
-              <p className="text-zinc-650 text-[10px] italic">Newsletter subscription closed</p>
-            )}
+            <ul className="space-y-2.5 text-[11px]">
+              <li>
+                <Link href="/shop?category=sarees" className="hover:text-white transition">Designer Sarees</Link>
+              </li>
+              <li>
+                <Link href="/shop?category=dresses" className="hover:text-white transition">Silk Dresses</Link>
+              </li>
+              <li>
+                <Link href="/shop?category=outerwear" className="hover:text-white transition">Outerwear & Coats</Link>
+              </li>
+              <li>
+                <Link href="/shop?category=accessories" className="hover:text-white transition">Luxury Accessories</Link>
+              </li>
+            </ul>
           </div>
 
         </div>
@@ -180,8 +171,8 @@ export const Footer: React.FC = () => {
           <p>{brand.copyright || `© ${new Date().getFullYear()} SSS Boutique. All Rights Reserved.`}</p>
           <div className="flex space-x-6">
             <Link href="/privacy" className="hover:text-zinc-400 transition">Privacy Policy</Link>
-            <Link href="/terms" className="hover:text-zinc-400 transition">Terms of Service</Link>
-            <Link href="/shipping" className="hover:text-zinc-400 transition">Shipping & Returns</Link>
+            <Link href="/terms" className="hover:text-zinc-400 transition">Terms & Conditions</Link>
+            <Link href="/refund" className="hover:text-zinc-400 transition">Refund Policy</Link>
           </div>
         </div>
       </div>

@@ -8,13 +8,15 @@ import { formatPrice } from "@/utils";
 import { Product, Category } from "@/types";
 import { fetchProducts, fetchCategories } from "@/features/products/productActions";
 import { useCart } from "@/features/cart/CartContext";
-import { Search, SlidersHorizontal, ChevronRight, X, Grid, Heart, Star, Eye, Plus, ShoppingBag } from "lucide-react";
+import { Search, SlidersHorizontal, ChevronRight, X, Grid, Heart, Star, Eye, Plus, ShoppingBag, ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { ProductCard, ProductCardSkeleton, EmptyState, PriceTag, SizeSelector } from "@/components";
 
-// Inner component that reads searchParams
+const SIZES_LIST = ["XS", "S", "M", "L", "XL", "XXL"];
+const ITEMS_PER_PAGE = 8;
+
 const ShopCatalog = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -34,21 +36,25 @@ const ShopCatalog = () => {
   // Filter States
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get("category") || "");
-  const [maxPrice, setMaxPrice] = useState<number>(1000);
+  const [maxPrice, setMaxPrice] = useState<number>(15000);
+  const [selectedSize, setSelectedSize] = useState<string>("");
+  const [availability, setAvailability] = useState<string>("all"); // all, instock, outofstock
   const [sortBy, setSortBy] = useState<string>(searchParams.get("sort") || "featured");
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       try {
-        const [cats, prods] = await Promise.all([fetchCategories(), fetchProducts()]);
+        const [cats, prods] = await Promise.all([fetchCategories(), fetchProducts(true)]);
         setCategories(cats);
         setProducts(prods);
         
-        // Dynamically find max price from products to set price range slider limit
         if (prods.length > 0) {
           const highest = Math.max(...prods.map((p) => p.price));
-          setMaxPrice(highest + 50);
+          setMaxPrice(highest + 500);
         }
       } catch (err) {
         console.error("Failed to load catalog", err);
@@ -81,12 +87,12 @@ const ShopCatalog = () => {
     setWishlist(updated);
     try {
       localStorage.setItem("sss_boutique_wishlist", JSON.stringify(updated));
+      window.dispatchEvent(new Event("wishlist-updated"));
     } catch (err) {
       console.error(err);
     }
   };
 
-  // Update query params in URL
   const updateUrlParams = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value) {
@@ -95,6 +101,7 @@ const ShopCatalog = () => {
       params.delete(key);
     }
     router.replace(`/shop?${params.toString()}`, { scroll: false });
+    setCurrentPage(1); // reset to page 1 on filter
   };
 
   const handleCategoryChange = (slug: string) => {
@@ -109,7 +116,6 @@ const ShopCatalog = () => {
     updateUrlParams("sort", val);
   };
 
-  // Sync state with URL params change
   useEffect(() => {
     setSelectedCategory(searchParams.get("category") || "");
     setSearchQuery(searchParams.get("q") || "");
@@ -119,26 +125,45 @@ const ShopCatalog = () => {
   // Filter & Sort Logic
   const filteredProducts = products
     .filter((prod) => {
+      // 1. Search Query
       const matchesSearch =
         searchQuery === "" ||
         prod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         prod.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
         prod.description.toLowerCase().includes(searchQuery.toLowerCase());
 
+      // 2. Category
       let matchesCategory = true;
       if (selectedCategory) {
         const categoryId = categories.find((c) => c.slug === selectedCategory)?.id;
         matchesCategory = prod.categoryId === categoryId;
       }
 
+      // 3. Max Price
       const matchesPrice = prod.price <= maxPrice;
 
-      return matchesSearch && matchesCategory && matchesPrice;
+      // 4. Size Filter
+      let matchesSize = true;
+      if (selectedSize) {
+        matchesSize = prod.variants.some((v) => v.size === selectedSize && v.stock > 0) ||
+                      (prod.metadata?.sizes?.includes(selectedSize) ?? false);
+      }
+
+      // 5. Availability Filter
+      let matchesAvailability = true;
+      if (availability === "instock") {
+        matchesAvailability = prod.stock > 0;
+      } else if (availability === "outofstock") {
+        matchesAvailability = prod.stock === 0;
+      }
+
+      return matchesSearch && matchesCategory && matchesPrice && matchesSize && matchesAvailability;
     })
     .sort((a, b) => {
       if (sortBy === "price-low") return a.price - b.price;
       if (sortBy === "price-high") return b.price - a.price;
       if (sortBy === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      if (sortBy === "popular") return b.stock - a.stock; // sorted by inventory units descending as mock popularity
       return 0;
     });
 
@@ -146,10 +171,13 @@ const ShopCatalog = () => {
     setSearchQuery("");
     setSelectedCategory("");
     setSortBy("featured");
+    setSelectedSize("");
+    setAvailability("all");
     if (products.length > 0) {
-      setMaxPrice(Math.max(...products.map((p) => p.price)) + 50);
+      setMaxPrice(Math.max(...products.map((p) => p.price)) + 500);
     }
     router.replace("/shop", { scroll: false });
+    setCurrentPage(1);
   };
 
   const triggerQuickView = (product: Product, e: React.MouseEvent) => {
@@ -171,6 +199,15 @@ const ShopCatalog = () => {
     setQuickViewProduct(null);
   };
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const activeCategory = categories.find((c) => c.slug === selectedCategory);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       {/* Editorial Page Header */}
@@ -179,10 +216,10 @@ const ShopCatalog = () => {
           <nav className="flex items-center space-x-1.5 text-[10px] text-zinc-400 font-poppins uppercase tracking-widest mb-2">
             <Link href="/" className="hover:text-primary transition">Home</Link>
             <ChevronRight className="w-3 h-3" />
-            <span className="text-zinc-600 font-medium">Shop</span>
+            <span className="text-zinc-650 font-medium">Shop</span>
           </nav>
           <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-wide">
-            The Autumn Edit
+            {activeCategory ? activeCategory.name : "The Autumn Edit"}
           </h1>
         </div>
 
@@ -207,10 +244,39 @@ const ShopCatalog = () => {
               <option value="price-low">Price: Low to High</option>
               <option value="price-high">Price: High to Low</option>
               <option value="newest">Newest Additions</option>
+              <option value="popular">Most Popular</option>
             </select>
           </div>
         </div>
       </div>
+
+      {/* Category Specific Banner / Details */}
+      {activeCategory && (
+        <div className="mt-8 border border-zinc-150 overflow-hidden relative bg-zinc-950/25 aspect-[21/9] sm:aspect-[21/6] flex flex-col justify-end p-6 sm:p-10">
+          {activeCategory.bannerImage && (
+            <div className="absolute inset-0 z-0">
+              <img
+                src={activeCategory.bannerImage}
+                alt=""
+                className="w-full h-full object-cover opacity-35"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
+            </div>
+          )}
+          <div className="relative z-10 space-y-2 max-w-xl text-white">
+            <span className="text-[10px] text-accent font-bold uppercase tracking-[0.25em]">Boutique Collection</span>
+            <h2 className="font-serif text-2xl sm:text-4xl font-light tracking-wide text-white leading-none">
+              {activeCategory.name}
+            </h2>
+            <p className="text-[11px] text-zinc-400 font-light max-w-md leading-relaxed font-poppins lowercase">
+              {activeCategory.description || "curated double-faced silhouettes with hand-tailored finishes."}
+            </p>
+            <span className="inline-block text-[9px] uppercase tracking-widest text-accent font-mono pt-1">
+              {filteredProducts.length} pieces found
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-10 mt-10">
         {/* SIDEBAR FILTERS (DESKTOP) */}
@@ -229,7 +295,7 @@ const ShopCatalog = () => {
                 }}
                 className="w-full bg-secondary border border-zinc-200 rounded-input pl-9 pr-3 py-2.5 text-xs focus:outline-none focus:border-accent placeholder-zinc-400"
               />
-              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-3" />
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-3.5" />
             </div>
           </div>
 
@@ -254,6 +320,51 @@ const ShopCatalog = () => {
             </div>
           </div>
 
+          {/* Availability Filter */}
+          <div className="space-y-3">
+            <h3 className="text-[11px] font-bold text-accent uppercase tracking-widest">Availability</h3>
+            <div className="flex flex-col space-y-2 text-xs text-zinc-600">
+              <button
+                onClick={() => { setAvailability("all"); setCurrentPage(1); }}
+                className={`text-left transition ${availability === "all" ? "text-primary font-semibold" : "hover:text-primary"}`}
+              >
+                All Items
+              </button>
+              <button
+                onClick={() => { setAvailability("instock"); setCurrentPage(1); }}
+                className={`text-left transition ${availability === "instock" ? "text-primary font-semibold" : "hover:text-primary"}`}
+              >
+                In Stock Only
+              </button>
+              <button
+                onClick={() => { setAvailability("outofstock"); setCurrentPage(1); }}
+                className={`text-left transition ${availability === "outofstock" ? "text-primary font-semibold" : "hover:text-primary"}`}
+              >
+                Out of Stock
+              </button>
+            </div>
+          </div>
+
+          {/* Size Filter */}
+          <div className="space-y-3">
+            <h3 className="text-[11px] font-bold text-accent uppercase tracking-widest">Filter by Size</h3>
+            <div className="grid grid-cols-3 gap-2">
+              {SIZES_LIST.map((sz) => (
+                <button
+                  key={sz}
+                  onClick={() => { setSelectedSize(selectedSize === sz ? "" : sz); setCurrentPage(1); }}
+                  className={`py-1.5 border text-[10px] font-bold tracking-wider text-center transition ${
+                    selectedSize === sz
+                      ? "bg-accent border-accent text-zinc-950 font-extrabold"
+                      : "border-zinc-200 text-zinc-600 hover:border-zinc-450"
+                  }`}
+                >
+                  {sz}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Price Range Slider */}
           <div className="space-y-3">
             <div className="flex justify-between items-center">
@@ -263,15 +374,15 @@ const ShopCatalog = () => {
             <input
               type="range"
               min="0"
-              max={products.length > 0 ? Math.max(...products.map((p) => p.price)) + 50 : 1000}
+              max={products.length > 0 ? Math.max(...products.map((p) => p.price)) + 500 : 15000}
               value={maxPrice}
-              onChange={(e) => setMaxPrice(Number(e.target.value))}
+              onChange={(e) => { setMaxPrice(Number(e.target.value)); setCurrentPage(1); }}
               className="w-full accent-accent bg-zinc-200 h-[2px] rounded-lg appearance-none cursor-pointer"
             />
           </div>
 
           {/* Active filters indicators */}
-          {(searchQuery || selectedCategory) && (
+          {(searchQuery || selectedCategory || selectedSize || availability !== "all") && (
             <button
               onClick={clearAllFilters}
               className="w-full text-center py-2.5 border border-foreground/20 text-xs hover:border-foreground rounded-button transition text-zinc-700 hover:text-black font-semibold uppercase tracking-wider"
@@ -332,6 +443,26 @@ const ShopCatalog = () => {
                 </div>
               </div>
 
+              {/* Size Filter */}
+              <div className="space-y-2">
+                <h4 className="text-[10px] font-bold text-accent uppercase tracking-widest">Sizes</h4>
+                <div className="grid grid-cols-3 gap-2">
+                  {SIZES_LIST.map((sz) => (
+                    <button
+                      key={sz}
+                      onClick={() => { setSelectedSize(selectedSize === sz ? "" : sz); setShowMobileFilters(false); }}
+                      className={`py-1.5 border text-[10px] font-bold tracking-wider text-center transition ${
+                        selectedSize === sz
+                          ? "bg-accent border-accent text-zinc-950 font-extrabold"
+                          : "border-zinc-200 text-zinc-650"
+                      }`}
+                    >
+                      {sz}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Price range */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
@@ -341,7 +472,7 @@ const ShopCatalog = () => {
                 <input
                   type="range"
                   min="0"
-                  max={products.length > 0 ? Math.max(...products.map((p) => p.price)) + 50 : 1000}
+                  max={products.length > 0 ? Math.max(...products.map((p) => p.price)) + 500 : 15000}
                   value={maxPrice}
                   onChange={(e) => setMaxPrice(Number(e.target.value))}
                   className="w-full accent-accent"
@@ -361,8 +492,8 @@ const ShopCatalog = () => {
           </div>
         )}
 
-        {/* PRODUCTS GRID (4 columns desktop, 2 columns mobile/tablet) */}
-        <section className="lg:col-span-3">
+        {/* PRODUCTS GRID & PAGINATION */}
+        <section className="lg:col-span-3 space-y-12">
           {loading ? (
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
               {Array(8)
@@ -371,7 +502,7 @@ const ShopCatalog = () => {
                   <ProductCardSkeleton key={i} />
                 ))}
             </div>
-          ) : filteredProducts.length === 0 ? (
+          ) : paginatedProducts.length === 0 ? (
             <EmptyState
               icon={<Grid className="w-8 h-8 text-zinc-300" />}
               title="No Pieces Found"
@@ -380,35 +511,66 @@ const ShopCatalog = () => {
               onAction={clearAllFilters}
             />
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-              {filteredProducts.map((prod) => {
-                const inWishlist = wishlist.includes(prod.id);
-                const categoryName = categories.find((c) => c.id === prod.categoryId)?.name || "Luxury Edit";
-                return (
-                  <ProductCard
-                    key={prod.id}
-                    product={prod}
-                    categoryName={categoryName}
-                    isWishlisted={inWishlist}
-                    onWishlistToggle={toggleWishlist}
-                    onQuickView={triggerQuickView}
-                    onAddToCart={(p, e) => {
-                      e.preventDefault();
-                      addToCart(p, 1, p.metadata?.sizes?.[0] || undefined);
-                    }}
-                  />
-                );
-              })}
-            </div>
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+                {paginatedProducts.map((prod) => {
+                  const inWishlist = wishlist.includes(prod.id);
+                  const categoryName = categories.find((c) => c.id === prod.categoryId)?.name || "Luxury Edit";
+                  return (
+                    <ProductCard
+                      key={prod.id}
+                      product={prod}
+                      categoryName={categoryName}
+                      isWishlisted={inWishlist}
+                      onWishlistToggle={toggleWishlist}
+                      onQuickView={triggerQuickView}
+                      onAddToCart={(p, e) => {
+                        e.preventDefault();
+                        addToCart(p, 1, p.metadata?.sizes?.[0] || p.variants?.[0]?.size);
+                      }}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Dynamic Page Controls */}
+              {totalPages > 1 && (
+                <div className="border-t border-zinc-150 pt-8 flex items-center justify-between font-poppins text-xs text-zinc-500">
+                  <span>
+                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} of {filteredProducts.length} pieces
+                  </span>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="p-2 border border-zinc-200 hover:border-accent disabled:opacity-30 transition"
+                      aria-label="Previous Page"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="px-3.5 py-2 font-mono text-zinc-800">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-2 border border-zinc-200 hover:border-accent disabled:opacity-30 transition"
+                      aria-label="Next Page"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </section>
       </div>
 
-      {/* QUICK VIEW MODAL (restricted glassmorphism modal) */}
+      {/* QUICK VIEW MODAL */}
       <AnimatePresence>
         {quickViewProduct && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.5 }}
@@ -417,14 +579,12 @@ const ShopCatalog = () => {
               className="fixed inset-0 bg-black/40 backdrop-blur-sm"
             />
 
-            {/* Content Panel */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               className="relative w-full max-w-2xl bg-card rounded-card shadow-2xl p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-8 z-10 overflow-hidden glass-modal"
             >
-              {/* Close Button */}
               <button
                 onClick={() => setQuickViewProduct(null)}
                 className="absolute top-4 right-4 p-1.5 bg-white/80 hover:text-primary transition rounded-full z-10"
@@ -433,7 +593,6 @@ const ShopCatalog = () => {
                 <X className="w-4 h-4" />
               </button>
 
-              {/* Product Cover image */}
               <div className="aspect-[3/4] bg-zinc-50 rounded-image overflow-hidden border border-zinc-100">
                 <img
                   src={quickViewProduct.images[0]?.imageUrl || "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=800&auto=format&fit=crop"}
@@ -442,7 +601,6 @@ const ShopCatalog = () => {
                 />
               </div>
 
-              {/* Details & Selectors */}
               <div className="flex flex-col justify-between py-2 space-y-4">
                 <div className="space-y-3">
                   <div>
@@ -464,7 +622,6 @@ const ShopCatalog = () => {
                     {quickViewProduct.description}
                   </p>
 
-                  {/* Size selector using component */}
                   {((quickViewProduct.metadata?.sizes && quickViewProduct.metadata.sizes.length > 0) || (quickViewProduct.variants && quickViewProduct.variants.length > 0)) && (
                     <div className="space-y-1.5 pt-1">
                       <SizeSelector

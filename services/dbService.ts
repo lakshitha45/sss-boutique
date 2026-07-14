@@ -300,6 +300,10 @@ export const dbService = {
         bannerImage: c.banner_image,
         imageUrl: c.banner_image, // alias
         isFeatured: c.is_featured,
+        active: c.active !== undefined ? c.active : true,
+        displayOrder: c.display_order || 0,
+        metaTitle: c.meta_title || undefined,
+        metaDescription: c.meta_description || undefined,
         createdAt: c.created_at,
         updatedAt: c.updated_at,
       }));
@@ -308,6 +312,7 @@ export const dbService = {
       return db.categories.map((c) => ({
         ...c,
         imageUrl: c.bannerImage, // alias
+        active: c.active !== undefined ? c.active : true,
       }));
     }
   },
@@ -322,6 +327,10 @@ export const dbService = {
           description: category.description,
           banner_image: category.bannerImage,
           is_featured: category.isFeatured,
+          active: category.active !== undefined ? category.active : true,
+          display_order: category.displayOrder !== undefined ? category.displayOrder : 0,
+          meta_title: category.metaTitle || null,
+          meta_description: category.metaDescription || null,
         }])
         .select()
         .single();
@@ -334,6 +343,10 @@ export const dbService = {
         bannerImage: data.banner_image,
         imageUrl: data.banner_image, // alias
         isFeatured: data.is_featured,
+        active: data.active,
+        displayOrder: data.display_order,
+        metaTitle: data.meta_title || undefined,
+        metaDescription: data.meta_description || undefined,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
       };
@@ -343,12 +356,81 @@ export const dbService = {
         ...category,
         id: `cat_${Date.now()}`,
         imageUrl: category.bannerImage, // alias
+        active: category.active !== undefined ? category.active : true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
       db.categories.push(newCategory);
       writeMockDb(db);
       return newCategory;
+    }
+  },
+
+  async updateCategory(
+    id: string,
+    updates: Partial<Omit<Category, "id" | "createdAt" | "updatedAt" | "imageUrl">>
+  ): Promise<Category> {
+    if (isSupabaseConfigured() && supabase) {
+      const mapped: any = {};
+      if (updates.name !== undefined) mapped.name = updates.name;
+      if (updates.slug !== undefined) mapped.slug = updates.slug;
+      if (updates.description !== undefined) mapped.description = updates.description;
+      if (updates.bannerImage !== undefined) mapped.banner_image = updates.bannerImage;
+      if (updates.isFeatured !== undefined) mapped.is_featured = updates.isFeatured;
+      if (updates.active !== undefined) mapped.active = updates.active;
+      if (updates.displayOrder !== undefined) mapped.display_order = updates.displayOrder;
+      if (updates.metaTitle !== undefined) mapped.meta_title = updates.metaTitle;
+      if (updates.metaDescription !== undefined) mapped.meta_description = updates.metaDescription;
+
+      const { data, error } = await supabase
+        .from("categories")
+        .update(mapped)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+
+      return {
+        id: data.id,
+        name: data.name,
+        slug: data.slug,
+        description: data.description,
+        bannerImage: data.banner_image,
+        imageUrl: data.banner_image, // alias
+        isFeatured: data.is_featured,
+        active: data.active,
+        metaTitle: data.meta_title || undefined,
+        metaDescription: data.meta_description || undefined,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+      };
+    } else {
+      const db = initMockDb();
+      const idx = db.categories.findIndex((c) => c.id === id);
+      if (idx === -1) throw new Error("Category not found");
+
+      const existing = db.categories[idx];
+      const updated: Category = {
+        ...existing,
+        ...updates,
+        imageUrl: updates.bannerImage !== undefined ? updates.bannerImage : existing.bannerImage,
+        updatedAt: new Date().toISOString(),
+      };
+
+      db.categories[idx] = updated;
+      writeMockDb(db);
+      return updated;
+    }
+  },
+
+  async deleteCategory(id: string): Promise<void> {
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase.from("categories").delete().eq("id", id);
+      if (error) throw error;
+    } else {
+      const db = initMockDb();
+      db.categories = db.categories.filter((c) => c.id !== id);
+      writeMockDb(db);
     }
   },
 
@@ -388,6 +470,8 @@ export const dbService = {
         care: p.care_instructions, // alias
         featured: p.featured,
         active: p.active,
+        metaTitle: p.meta_title || undefined,
+        metaDescription: p.meta_description || undefined,
         createdAt: p.created_at,
         updatedAt: p.updated_at,
         images: (p.product_images || []).map((img: any) => ({
@@ -428,6 +512,8 @@ export const dbService = {
             sizes: variants.map((v) => v.size),
             colors: [],
           },
+          metaTitle: (p as any).metaTitle || p.productName,
+          metaDescription: (p as any).metaDescription || p.description,
           images,
           variants,
         } as Product;
@@ -471,6 +557,8 @@ export const dbService = {
         care: data.care_instructions, // alias
         featured: data.featured,
         active: data.active,
+        metaTitle: data.meta_title || undefined,
+        metaDescription: data.meta_description || undefined,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         images: (data.product_images || []).map((img: any) => ({
@@ -541,6 +629,8 @@ export const dbService = {
           care_instructions: product.careInstructions,
           featured: product.featured,
           active: product.active,
+          meta_title: product.metaTitle || null,
+          meta_description: product.metaDescription || null,
         }])
         .select()
         .single();
@@ -585,6 +675,8 @@ export const dbService = {
         compareAtPrice: pData.discount_price, // alias
         inventory: pData.stock, // alias
         careInstructions: pData.care_instructions,
+        metaTitle: pData.meta_title || undefined,
+        metaDescription: pData.meta_description || undefined,
         metadata: {
           material: pData.material,
           care: pData.care_instructions,
@@ -696,6 +788,8 @@ export const dbService = {
       if (updates.careInstructions !== undefined) mapped.care_instructions = updates.careInstructions;
       if (updates.featured !== undefined) mapped.featured = updates.featured;
       if (updates.active !== undefined) mapped.active = updates.active;
+      if (updates.metaTitle !== undefined) mapped.meta_title = updates.metaTitle;
+      if (updates.metaDescription !== undefined) mapped.meta_description = updates.metaDescription;
 
       if (updates.variants) {
         mapped.stock = updates.variants.reduce((sum, v) => sum + v.stock, 0);
@@ -866,6 +960,7 @@ export const dbService = {
         orderStatus: o.order_status,
         shippingAddress: o.shipping_address,
         trackingNumber: o.tracking_number,
+        orderNotes: o.order_notes || undefined,
         createdAt: o.created_at,
         items: (o.order_items || []).map((item: any) => ({
           id: item.id,
@@ -905,6 +1000,7 @@ export const dbService = {
           order_status: "pending",
           shipping_address: order.shippingAddress,
           tracking_number: order.trackingNumber,
+          order_notes: order.orderNotes || null,
         }])
         .select()
         .single();
@@ -954,6 +1050,7 @@ export const dbService = {
         orderNumber,
         paymentStatus: "pending",
         orderStatus: "pending",
+        orderNotes: oData.order_notes || undefined,
         createdAt: oData.created_at,
       };
     } else {

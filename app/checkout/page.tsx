@@ -24,6 +24,7 @@ const checkoutSchema = z.object({
   state: z.string().min(2, "State must be at least 2 characters"),
   postalCode: z.string().min(6, "PIN Code must be 6 digits").max(6, "PIN Code must be 6 digits").regex(/^[0-9]{6}$/, "PIN Code must be exactly 6 digits"),
   country: z.string().min(1, "Country is required"),
+  orderNotes: z.string().optional(),
 });
 
 type CheckoutFormData = z.infer<typeof checkoutSchema>;
@@ -53,6 +54,7 @@ export default function CheckoutPage() {
       state: "",
       postalCode: "",
       country: "India",
+      orderNotes: "",
     },
   });
 
@@ -89,6 +91,7 @@ export default function CheckoutPage() {
           variantSize: item.size,
         })),
         trackingNumber: `SSS-DELHIVERY-${Math.floor(100000 + Math.random() * 900000)}`,
+        orderNotes: data.orderNotes || undefined,
       };
 
       const res = await placeOrder(orderPayload);
@@ -289,6 +292,15 @@ export default function CheckoutPage() {
                     ]}
                     {...register("country")}
                   />
+
+                  <div className="space-y-1.5 pt-2">
+                    <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Order Notes (Optional)</label>
+                    <textarea
+                      placeholder="Special instructions for delivery, boutique preferences..."
+                      {...register("orderNotes")}
+                      className="w-full bg-[#0A0A0A] border border-[#1C1C1C] rounded-none px-3 py-2.5 focus:outline-none focus:border-accent text-white min-h-[85px]"
+                    />
+                  </div>
                 </div>
 
                 {/* Mock Payment Details */}

@@ -102,13 +102,13 @@ export const Header: React.FC = () => {
             <div className="flex-1 text-center md:flex-none">
               <Link
                 href="/"
-                className="hover:opacity-80 transition duration-300 inline-flex items-center justify-center py-1"
+                className="hover:opacity-80 transition duration-300 inline-flex items-center justify-center h-20 overflow-visible"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={brand.logoUrl}
                   alt={brand.brandName}
-                  className="h-10 sm:h-12 w-auto object-contain"
+                  className="h-20 w-auto object-contain scale-[1.35] transform origin-center -translate-x-3"
                   onError={(e) => {
                     e.currentTarget.style.display = "none";
                     const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;

@@ -263,7 +263,7 @@ export default function InventoryPage() {
                           >
                             <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block">Sizes Variant Quantities allocation</span>
                             
-                            <div className="grid grid-cols-5 gap-3">
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                               {prod.variants.map((v) => (
                                 <div key={v.size} className="bg-[#121212] border border-[#1F1F1F] p-3 flex flex-col items-center space-y-2">
                                   <span className="font-bold text-zinc-400">{v.size}</span>

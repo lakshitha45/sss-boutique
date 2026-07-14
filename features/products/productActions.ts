@@ -45,6 +45,8 @@ export async function saveProduct(
       colors?: string[];
     };
     variants?: { size: string; stock: number; sku?: string }[];
+    metaTitle?: string;
+    metaDescription?: string;
   }
 ): Promise<{ success: boolean; product?: Product; error?: string }> {
   try {
@@ -108,6 +110,8 @@ export async function saveProduct(
         active: productData.active !== undefined ? productData.active : true,
         images: imagesPayload,
         variants: variantsPayload,
+        metaTitle: productData.metaTitle,
+        metaDescription: productData.metaDescription,
       });
     } else {
       product = await dbService.createProduct({
@@ -126,6 +130,8 @@ export async function saveProduct(
         active: productData.active !== undefined ? productData.active : true,
         images: imagesPayload,
         variants: variantsPayload,
+        metaTitle: productData.metaTitle,
+        metaDescription: productData.metaDescription,
       });
     }
 
@@ -360,22 +366,24 @@ export async function saveCategory(data: {
   description?: string;
   bannerImage?: string;
   isFeatured: boolean;
+  active?: boolean;
+  displayOrder?: number;
+  metaTitle?: string;
+  metaDescription?: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     if (data.id) {
-      // Update: since dbService may not have updateCategory, we delete + recreate
-      // or we can just modify the local JSON store through createCategory pattern
-      // For now, we handle it by deleting old and creating new
-      const allCategories = await dbService.getCategories();
-      const existing = allCategories.find((c) => c.id === data.id);
-      if (existing) {
-        // dbService stores categories in-memory or JSON; we create a new one
-        // Actually let's just use createCategory for new, and for edit we'll
-        // update in-place by accessing the internal store
-        if (typeof (dbService as any).updateCategory === "function") {
-          await (dbService as any).updateCategory(data.id, data);
-        }
-      }
+      await dbService.updateCategory(data.id, {
+        name: data.name,
+        slug: data.slug,
+        description: data.description,
+        bannerImage: data.bannerImage,
+        isFeatured: data.isFeatured,
+        active: data.active,
+        displayOrder: data.displayOrder,
+        metaTitle: data.metaTitle,
+        metaDescription: data.metaDescription,
+      });
     } else {
       await dbService.createCategory({
         name: data.name,
@@ -383,6 +391,10 @@ export async function saveCategory(data: {
         description: data.description,
         bannerImage: data.bannerImage,
         isFeatured: data.isFeatured,
+        active: data.active !== undefined ? data.active : true,
+        displayOrder: data.displayOrder !== undefined ? data.displayOrder : 0,
+        metaTitle: data.metaTitle,
+        metaDescription: data.metaDescription,
       });
     }
     revalidatePath("/admin/categories");
@@ -395,9 +407,7 @@ export async function saveCategory(data: {
 
 export async function deleteCategory(id: string): Promise<{ success: boolean; error?: string }> {
   try {
-    if (typeof (dbService as any).deleteCategory === "function") {
-      await (dbService as any).deleteCategory(id);
-    }
+    await dbService.deleteCategory(id);
     revalidatePath("/admin/categories");
     revalidatePath("/");
     return { success: true };

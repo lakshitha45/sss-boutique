@@ -6,6 +6,10 @@ export interface Category {
   bannerImage?: string;
   imageUrl?: string; // Alias for backward compatibility
   isFeatured: boolean;
+  active?: boolean;
+  displayOrder?: number;
+  metaTitle?: string;
+  metaDescription?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,6 +63,8 @@ export interface Product {
     colors?: string[];
     brand?: string;
   };
+  metaTitle?: string;
+  metaDescription?: string;
 }
 
 export interface UserProfile {
@@ -148,6 +154,7 @@ export interface Order {
   };
   items: OrderItem[];
   trackingNumber?: string;
+  orderNotes?: string;
   createdAt: string;
 }
 
