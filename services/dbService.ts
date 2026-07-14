@@ -248,7 +248,20 @@ const initMockDb = (): MockSchema => {
 
   try {
     const raw = fs.readFileSync(MOCK_DB_PATH, "utf8");
-    return JSON.parse(raw);
+    const data = JSON.parse(raw);
+    if (!data.categories) data.categories = [];
+    if (!data.products) data.products = [];
+    if (!data.product_images) data.product_images = [];
+    if (!data.product_variants) data.product_variants = [];
+    if (!data.orders) data.orders = [];
+    if (!data.users) data.users = [];
+    if (!data.activity_logs) data.activity_logs = [];
+    if (!data.notifications) data.notifications = [];
+    if (!data.addresses) data.addresses = [];
+    if (!data.shipments) data.shipments = [];
+    if (!data.notification_logs) data.notification_logs = [];
+    if (!data.notification_preferences) data.notification_preferences = [];
+    return data;
   } catch (err) {
     console.error("Error reading local DB:", err);
     return {
