@@ -129,20 +129,39 @@ export interface OrderItem {
   price: number;
 }
 
+export interface OrderStatusHistoryItem {
+  status: string;
+  timestamp: string;
+  user: string;
+  action: string;
+  note?: string;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
   userId?: string;
   customerName: string;
   customerEmail: string;
+  customerPhone?: string;
   subtotal: number;
   discount: number;
   shipping: number;
   tax: number;
   grandTotal: number;
-  paymentStatus: "pending" | "paid" | "refunded" | "failed";
-  orderStatus: "pending" | "confirmed" | "packed" | "shipped" | "delivered" | "cancelled";
+  paymentStatus: string;
+  orderStatus: string;
   shippingAddress: {
+    fullName: string;
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+    phone: string;
+  };
+  billingAddress?: {
     fullName: string;
     addressLine1: string;
     addressLine2?: string;
@@ -155,7 +174,10 @@ export interface Order {
   items: OrderItem[];
   trackingNumber?: string;
   orderNotes?: string;
+  adminNotes?: string;
   createdAt: string;
+  updatedAt?: string;
+  statusHistory?: OrderStatusHistoryItem[];
 }
 
 export interface Coupon {
@@ -192,8 +214,18 @@ export interface HomepageBanner {
 export interface ActivityLog {
   id: string;
   userId: string;
-  action: "Added Product" | "Edited Product" | "Deleted Product" | "Imported CSV";
+  action: string;
   details?: string;
+  ip?: string; // IP Placeholder
+  createdAt: string;
+}
+
+export interface Notification {
+  id: string;
+  type: "new_order" | "order_cancelled" | "low_stock" | "inventory_updated" | "customer_registered";
+  title: string;
+  message: string;
+  read: boolean;
   createdAt: string;
 }
 

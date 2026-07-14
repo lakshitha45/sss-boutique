@@ -2,14 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/features/auth/AuthContext";
-import { fetchOrders } from "@/features/orders/orderActions";
+import { fetchOrders, fetchAddresses, createAddress, updateAddress, deleteAddress, setDefaultAddress, updateProfile } from "@/features/orders/orderActions";
 import { Order, Product } from "@/types";
 import { formatPrice } from "@/utils";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, Package, Truck, Heart, User, MapPin, Key, LogOut, CheckCircle2, ShoppingBag, X } from "lucide-react";
+import { ChevronRight, Package, Truck, Heart, User, MapPin, Key, LogOut, CheckCircle2, ShoppingBag, X, Clock } from "lucide-react";
 import { fetchProducts } from "@/features/products/productActions";
 import { useCart } from "@/features/cart/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -46,17 +46,8 @@ export default function AccountDashboardPage() {
     state: string;
     postalCode: string;
     phone: string;
-  }>>([
-    {
-      id: "addr_1",
-      fullName: "Lakshitha S",
-      addressLine1: "12, Kasturba Gandhi Marg",
-      city: "New Delhi",
-      state: "Delhi",
-      postalCode: "110001",
-      phone: "+91 98765 43210"
-    }
-  ]);
+    isDefault?: boolean;
+  }>>([]);
 
   const [newAddrName, setNewAddrName] = useState("");
   const [newAddrLine, setNewAddrLine] = useState("");
@@ -89,6 +80,29 @@ export default function AccountDashboardPage() {
       }
     }
     loadOrders();
+  }, [user]);
+
+  // Load addresses
+  useEffect(() => {
+    async function loadAddresses() {
+      if (!user) return;
+      try {
+        const addrs = await fetchAddresses(user.id);
+        setAddresses(addrs.map((a: any) => ({
+          id: a.id,
+          fullName: a.name,
+          addressLine1: a.address,
+          city: a.city,
+          state: a.state,
+          postalCode: a.pincode,
+          phone: a.phone,
+          isDefault: a.isDefault,
+        })));
+      } catch (err) {
+        console.error("Failed to load addresses", err);
+      }
+    }
+    loadAddresses();
   }, [user]);
 
   // Load wishlist
@@ -144,12 +158,18 @@ export default function AccountDashboardPage() {
     setTimeout(() => setToastMessage(""), 3000);
   };
 
-  const handleUpdateProfile = (e: React.FormEvent) => {
+  const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    showToast("Profile details updated successfully!");
+    if (!user) return;
+    const res = await updateProfile(user.id, profileName, profilePhone);
+    if (res.success) {
+      showToast("Profile details updated successfully!");
+    } else {
+      showToast(res.error || "Failed to update profile.");
+    }
   };
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passwordOld || !passwordNew) {
       showToast("Please fill in both password fields.");
@@ -160,35 +180,69 @@ export default function AccountDashboardPage() {
     setPasswordNew("");
   };
 
-  const handleAddAddress = (e: React.FormEvent) => {
+  const handleAddAddress = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAddrName || !newAddrLine || !newAddrCity || !newAddrState || !newAddrPincode || !newAddrPhone) {
       showToast("Please fill in all address fields.");
       return;
     }
-    const newAddr = {
-      id: `addr_${Date.now()}`,
-      fullName: newAddrName,
-      addressLine1: newAddrLine,
+    const res = await createAddress({
+      userId: user.id,
+      name: newAddrName,
+      phone: newAddrPhone,
+      address: newAddrLine,
       city: newAddrCity,
       state: newAddrState,
-      postalCode: newAddrPincode,
-      phone: newAddrPhone
-    };
-    setAddresses([...addresses, newAddr]);
-    setNewAddrName("");
-    setNewAddrLine("");
-    setNewAddrCity("");
-    setNewAddrState("");
-    setNewAddrPincode("");
-    setNewAddrPhone("");
-    setShowAddressForm(false);
-    showToast("Shipping address saved.");
+      country: "India",
+      pincode: newAddrPincode,
+      isDefault: addresses.length === 0,
+    });
+    if (res.success && res.address) {
+      const a = res.address;
+      setAddresses([...addresses, {
+        id: a.id,
+        fullName: a.name,
+        addressLine1: a.address,
+        city: a.city,
+        state: a.state,
+        postalCode: a.pincode,
+        phone: a.phone,
+        isDefault: a.isDefault,
+      }]);
+      setNewAddrName("");
+      setNewAddrLine("");
+      setNewAddrCity("");
+      setNewAddrState("");
+      setNewAddrPincode("");
+      setNewAddrPhone("");
+      setShowAddressForm(false);
+      showToast("Shipping address saved.");
+    } else {
+      showToast(res.error || "Failed to save address.");
+    }
   };
 
-  const handleDeleteAddress = (id: string) => {
-    setAddresses(addresses.filter((a) => a.id !== id));
-    showToast("Address deleted.");
+  const handleDeleteAddress = async (id: string) => {
+    const res = await deleteAddress(id, user.id);
+    if (res.success) {
+      setAddresses(addresses.filter((a) => a.id !== id));
+      showToast("Address deleted.");
+    } else {
+      showToast("Failed to delete address.");
+    }
+  };
+
+  const handleSetDefaultAddress = async (id: string) => {
+    const res = await setDefaultAddress(id, user.id);
+    if (res.success) {
+      setAddresses(addresses.map((a) => ({
+        ...a,
+        isDefault: a.id === id,
+      })));
+      showToast("Default address updated.");
+    } else {
+      showToast("Failed to set default address.");
+    }
   };
 
   const handleRemoveFromWishlist = (productId: string) => {
@@ -218,15 +272,15 @@ export default function AccountDashboardPage() {
     router.push("/");
   };
 
-  const getStatusColor = (status: Order["orderStatus"]) => {
-    switch (status) {
-      case "pending": return "bg-amber-950/40 text-amber-400 border-amber-900/50";
-      case "confirmed": return "bg-sky-950/40 text-sky-400 border-sky-900/50";
-      case "packed": return "bg-blue-950/40 text-blue-400 border-blue-900/50";
-      case "shipped": return "bg-indigo-950/40 text-indigo-400 border-indigo-900/50";
-      case "delivered": return "bg-emerald-950/40 text-emerald-400 border-emerald-900/50";
-      default: return "bg-zinc-900/60 text-zinc-400 border-zinc-800";
-    }
+  const getStatusColor = (status: string) => {
+    const s = status.toLowerCase();
+    if (s.includes("pending")) return "bg-amber-950/40 text-amber-400 border-amber-900/50";
+    if (s.includes("received") || s.includes("confirm") || s.includes("paid")) return "bg-sky-950/40 text-sky-400 border-sky-900/50";
+    if (s.includes("process") || s.includes("pack")) return "bg-blue-950/40 text-blue-400 border-blue-900/50";
+    if (s.includes("ship") || s.includes("ready")) return "bg-indigo-950/40 text-indigo-400 border-indigo-900/50";
+    if (s.includes("deliver")) return "bg-emerald-950/40 text-emerald-400 border-emerald-900/50";
+    if (s.includes("cancel") || s.includes("refund") || s.includes("return")) return "bg-rose-950/40 text-rose-400 border-rose-900/50";
+    return "bg-zinc-900/60 text-zinc-400 border-zinc-800";
   };
 
   return (
@@ -404,16 +458,47 @@ export default function AccountDashboardPage() {
                             </div>
                           )}
 
-                          {/* Delhivery tracking ID */}
-                          {order.trackingNumber && (
-                            <div className="bg-[#181818] px-6 py-3 border-t border-[#1F1F1F] flex items-center space-x-2 text-[10px] text-zinc-400">
-                              <Truck className="w-3.5 h-3.5 text-accent flex-shrink-0" />
-                              <span>
-                                Courier Partner: Delhivery Express Logistics <br />
-                                Waybill / Tracking ID: <strong className="text-accent font-semibold">{order.trackingNumber}</strong>
-                              </span>
+                          {/* Fulfillment Timeline Journey */}
+                          <div className="bg-[#181818] border-t border-[#1F1F1F] px-6 py-4 space-y-4">
+                            <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
+                              <span>Fulfillment Journey</span>
+                              {order.trackingNumber && (
+                                <span className="font-mono text-accent">Waybill: {order.trackingNumber}</span>
+                              )}
                             </div>
-                          )}
+                            <div className="relative border-l border-accent/20 pl-4 ml-2.5 space-y-4 pt-1 pb-1">
+                              {order.statusHistory && order.statusHistory.length > 0 ? (
+                                order.statusHistory.map((historyItem: any, index: number) => (
+                                  <div key={index} className="relative text-[11px]">
+                                    <span className="absolute -left-[21px] top-0.5 w-2.5 h-2.5 bg-accent border border-black rounded-full" />
+                                    <div className="space-y-0.5">
+                                      <div className="flex items-center space-x-2">
+                                        <span className="font-semibold text-white uppercase text-[9px] tracking-wide bg-accent/10 border border-accent/25 px-1.5 py-0.5">
+                                          {historyItem.status}
+                                        </span>
+                                        <span className="text-[9px] text-zinc-500 font-mono flex items-center space-x-1">
+                                          <Clock className="w-3 h-3 text-zinc-500" />
+                                          <span>{new Date(historyItem.timestamp).toLocaleString()}</span>
+                                        </span>
+                                      </div>
+                                      <p className="text-zinc-400 font-light text-[10px]">{historyItem.action}</p>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="relative text-[11px]">
+                                  <span className="absolute -left-[21px] top-0.5 w-2.5 h-2.5 bg-accent border border-black rounded-full" />
+                                  <div className="space-y-0.5">
+                                    <span className="font-semibold text-white uppercase text-[9px] tracking-wide bg-accent/10 border border-accent/25 px-1.5 py-0.5">Placed</span>
+                                    <span className="text-[9px] text-zinc-500 font-mono">
+                                      {new Date(order.createdAt).toLocaleString()}
+                                    </span>
+                                    <p className="text-zinc-400 font-light text-[10px]">Your order is successfully received.</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -549,19 +634,38 @@ export default function AccountDashboardPage() {
                   {/* List of Saved Addresses */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {addresses.map((a) => (
-                      <div key={a.id} className="border border-[#1A1A1A] bg-[#121212] p-5 relative space-y-3 flex flex-col justify-between">
+                      <div key={a.id} className={`border p-5 relative space-y-3 flex flex-col justify-between ${
+                        a.isDefault ? "border-accent bg-[#121212]" : "border-[#1A1A1A] bg-[#121212]/40"
+                      }`}>
                         <div className="text-xs space-y-1 font-light leading-relaxed">
-                          <h4 className="font-serif text-sm font-semibold text-white tracking-wide block mb-1">{a.fullName}</h4>
+                          <div className="flex justify-between items-start">
+                            <h4 className="font-serif text-sm font-semibold text-white tracking-wide block mb-1">{a.fullName}</h4>
+                            {a.isDefault && (
+                              <span className="bg-accent/10 border border-accent/25 text-accent text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5">
+                                Default
+                              </span>
+                            )}
+                          </div>
                           <p className="text-zinc-400">{a.addressLine1}</p>
                           <p className="text-zinc-400">{a.city}, {a.state} {a.postalCode}</p>
-                          <p className="text-zinc-550 pt-1 font-mono text-[10px]">Phone: {a.phone}</p>
+                          <p className="text-zinc-500 pt-1 font-mono text-[10px]">Phone: {a.phone}</p>
                         </div>
-                        <button
-                          onClick={() => handleDeleteAddress(a.id)}
-                          className="text-rose-400 hover:text-rose-500 font-bold uppercase tracking-wider text-[9px] mt-3 block w-fit border-b border-rose-400/20"
-                        >
-                          Delete Address
-                        </button>
+                        <div className="flex items-center space-x-3.5 pt-2 border-t border-[#1F1F1F]/40">
+                          {!a.isDefault && (
+                            <button
+                              onClick={() => handleSetDefaultAddress(a.id)}
+                              className="text-accent hover:underline font-bold uppercase tracking-wider text-[9px]"
+                            >
+                              Set Default
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteAddress(a.id)}
+                            className="text-rose-400 hover:underline font-bold uppercase tracking-wider text-[9px]"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

@@ -29,6 +29,7 @@ import {
   ChevronRight,
   Command,
 } from "lucide-react";
+import { fetchNotifications, markNotificationAsRead } from "@/features/orders/orderActions";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, isAdmin, logout } = useAuth();
@@ -38,6 +39,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [collapsed, setCollapsed] = React.useState(false);
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [notificationsOpen, setNotificationsOpen] = React.useState(false);
+  const [notifications, setNotifications] = React.useState<any[]>([]);
+
+  const loadNotifications = async () => {
+    try {
+      const data = await fetchNotifications();
+      setNotifications(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    if (user && isAdmin) {
+      loadNotifications();
+    }
+  }, [user, isAdmin]);
 
   useEffect(() => {
     if (!isLoading && (!user || !isAdmin)) {
@@ -118,11 +135,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const allLinks = sidebarSections.flatMap((s) => s.links);
 
-  const notifications = [
-    { id: "1", text: "New order #ORD-1042 placed", time: "2 mins ago", type: "order" as const },
-    { id: "2", text: "Low stock: Pink Saree (2 left)", time: "15 mins ago", type: "stock" as const },
-    { id: "3", text: "CSV import completed", time: "1 hr ago", type: "import" as const },
-  ];
+
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-zinc-100 flex font-poppins text-xs selection:bg-accent selection:text-foreground">
@@ -280,12 +293,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {/* Notifications */}
             <div className="relative">
               <button
-                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                onClick={() => {
+                  setNotificationsOpen(!notificationsOpen);
+                  loadNotifications();
+                }}
                 className="relative w-9 h-9 rounded-lg bg-[#141414] border border-[#1F1F1F] hover:border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white transition"
                 aria-label="Notifications"
               >
                 <Bell className="w-4 h-4" />
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-accent rounded-full" />
+                {notifications.some((n) => !n.read) && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-accent rounded-full animate-pulse" />
+                )}
               </button>
 
               {/* Notifications dropdown */}
@@ -300,22 +318,40 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       transition={{ duration: 0.15 }}
                       className="absolute right-0 top-full mt-2 w-80 bg-[#141414] border border-[#1F1F1F] rounded-xl shadow-2xl z-50 overflow-hidden"
                     >
-                      <div className="px-4 py-3 border-b border-[#1F1F1F]">
+                      <div className="px-4 py-3 border-b border-[#1F1F1F] flex justify-between items-center">
                         <h3 className="text-[11px] font-bold text-white uppercase tracking-wider">Notifications</h3>
+                        <span className="text-[9px] text-zinc-500 font-mono">
+                          {notifications.filter((n) => !n.read).length} unread
+                        </span>
                       </div>
                       <div className="max-h-64 overflow-y-auto">
-                        {notifications.map((n) => (
-                          <div
-                            key={n.id}
-                            className="px-4 py-3 hover:bg-[#1A1A1A] transition-colors border-b border-[#1A1A1A] last:border-b-0 cursor-pointer"
-                          >
-                            <p className="text-[11px] text-zinc-200 leading-relaxed">{n.text}</p>
-                            <span className="text-[9px] text-zinc-500 mt-0.5 block">{n.time}</span>
+                        {notifications.length === 0 ? (
+                          <div className="px-4 py-6 text-center text-zinc-500 font-light">
+                            No notifications at this time.
                           </div>
-                        ))}
+                        ) : (
+                          notifications.map((n) => (
+                            <div
+                              key={n.id}
+                              onClick={async () => {
+                                await markNotificationAsRead(n.id);
+                                loadNotifications();
+                              }}
+                              className={`px-4 py-3 hover:bg-[#1A1A1A] transition-colors border-b border-[#1A1A1A] last:border-b-0 cursor-pointer ${
+                                !n.read ? "bg-accent/5 border-l-2 border-l-accent" : ""
+                              }`}
+                            >
+                              <p className="text-[11px] text-zinc-200 leading-relaxed font-semibold">{n.title}</p>
+                              <p className="text-[10px] text-zinc-400 leading-relaxed mt-0.5">{n.message}</p>
+                              <span className="text-[9px] text-zinc-500 mt-1 block">{new Date(n.createdAt).toLocaleString()}</span>
+                            </div>
+                          ))
+                        )}
                       </div>
                       <div className="px-4 py-2.5 border-t border-[#1F1F1F] text-center">
-                        <span className="text-[10px] text-accent font-semibold cursor-pointer hover:underline">View All</span>
+                        <span onClick={() => { loadNotifications(); }} className="text-[10px] text-accent font-semibold cursor-pointer hover:underline">
+                          Refresh List
+                        </span>
                       </div>
                     </motion.div>
                   </>

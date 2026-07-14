@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import { Product, Category, ProductImage, ProductVariant, Order, UserProfile, ActivityLog } from "@/types";
+import { Product, Category, ProductImage, ProductVariant, Order, UserProfile, ActivityLog, Address, Notification } from "@/types";
 
 const MOCK_DB_DIR = path.join(process.cwd(), "data");
 const MOCK_DB_PATH = path.join(MOCK_DB_DIR, "db.json");
@@ -140,6 +140,8 @@ interface MockSchema {
   orders: Order[];
   users: UserProfile[];
   activity_logs: ActivityLog[];
+  notifications: Notification[];
+  addresses: Address[];
 }
 
 const initMockDb = (): MockSchema => {
@@ -230,6 +232,8 @@ const initMockDb = (): MockSchema => {
           createdAt: new Date().toISOString(),
         },
       ],
+      notifications: [],
+      addresses: [],
     };
 
     fs.writeFileSync(MOCK_DB_PATH, JSON.stringify(initialData, null, 2), "utf8");
@@ -241,7 +245,17 @@ const initMockDb = (): MockSchema => {
     return JSON.parse(raw);
   } catch (err) {
     console.error("Error reading local DB:", err);
-    return { categories: [], products: [], product_images: [], product_variants: [], orders: [], users: [], activity_logs: [] };
+    return {
+      categories: [],
+      products: [],
+      product_images: [],
+      product_variants: [],
+      orders: [],
+      users: [],
+      activity_logs: [],
+      notifications: [],
+      addresses: [],
+    };
   }
 };
 
@@ -251,13 +265,22 @@ const writeMockDb = (data: MockSchema) => {
 
 export const dbService = {
   // --- AUDIT LOGGER ---
-  async logActivity(userId: string, action: ActivityLog["action"], details?: string): Promise<void> {
+  async logActivity(userId: string, action: string, details?: string, ip?: string): Promise<void> {
     if (isSupabaseConfigured() && supabase) {
-      await supabase.from("activity_logs").insert({
-        user_id: userId,
-        action,
-        details,
-      });
+      // Try using ip_address, if there's any schema mismatch we log it inside details text
+      try {
+        await supabase.from("activity_logs").insert({
+          user_id: userId,
+          action,
+          details: ip ? `${details} [IP: ${ip}]` : details,
+        });
+      } catch (e) {
+        await supabase.from("activity_logs").insert({
+          user_id: userId,
+          action,
+          details,
+        });
+      }
     } else {
       const db = initMockDb();
       db.activity_logs.push({
@@ -265,6 +288,7 @@ export const dbService = {
         userId,
         action,
         details,
+        ip: ip || "127.0.0.1",
         createdAt: new Date().toISOString(),
       });
       writeMockDb(db);
@@ -937,6 +961,7 @@ export const dbService = {
   },
 
   // --- ORDERS ---
+  // --- ORDERS ---
   async getOrders(): Promise<Order[]> {
     if (isSupabaseConfigured() && supabase) {
       const { data, error } = await supabase
@@ -962,6 +987,7 @@ export const dbService = {
         trackingNumber: o.tracking_number,
         orderNotes: o.order_notes || undefined,
         createdAt: o.created_at,
+        statusHistory: o.status_history || [],
         items: (o.order_items || []).map((item: any) => ({
           id: item.id,
           orderId: item.order_id,
@@ -982,8 +1008,28 @@ export const dbService = {
 
   async createOrder(order: Omit<Order, "id" | "createdAt" | "orderNumber" | "paymentStatus" | "orderStatus">): Promise<Order> {
     const orderNumber = `SSS-ORD-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const initialHistory = [{
+      status: "Pending Payment",
+      timestamp: new Date().toISOString(),
+      user: "customer",
+      action: "Placed order",
+    }];
 
     if (isSupabaseConfigured() && supabase) {
+      // 1. Stock Checks to prevent negative inventory
+      for (const item of order.items) {
+        if (item.variantId) {
+          const { data: vData } = await supabase
+            .from("product_variants")
+            .select("stock")
+            .eq("id", item.variantId)
+            .single();
+          if (!vData || vData.stock < item.quantity) {
+            throw new Error(`Insufficient stock for product variant.`);
+          }
+        }
+      }
+
       const { data: oData, error: oErr } = await supabase
         .from("orders")
         .insert([{
@@ -1001,6 +1047,7 @@ export const dbService = {
           shipping_address: order.shippingAddress,
           tracking_number: order.trackingNumber,
           order_notes: order.orderNotes || null,
+          status_history: initialHistory,
         }])
         .select()
         .single();
@@ -1021,16 +1068,25 @@ export const dbService = {
       const { error: itemsErr } = await supabase.from("order_items").insert(itemsToInsert);
       if (itemsErr) throw itemsErr;
 
+      // Decrement stock & check low stock
       for (const item of order.items) {
         if (item.variantId) {
           const { data: currentVariant } = await supabase
             .from("product_variants")
-            .select("stock")
+            .select("stock, sku")
             .eq("id", item.variantId)
             .single();
           if (currentVariant) {
             const newVarStock = Math.max(0, currentVariant.stock - item.quantity);
             await supabase.from("product_variants").update({ stock: newVarStock }).eq("id", item.variantId);
+            
+            if (newVarStock < 5) {
+              await this.createNotification(
+                "low_stock",
+                "Low Stock Alert",
+                `Variant ${currentVariant.sku} stock level is low: ${newVarStock} remaining.`
+              );
+            }
           }
         }
         
@@ -1044,6 +1100,14 @@ export const dbService = {
         }
       }
 
+      await this.logActivity(order.userId || "guest", "Customer placed order", `Order Number: ${orderNumber}`, "127.0.0.1");
+
+      await this.createNotification(
+        "new_order",
+        "New Order Placed",
+        `Order ${orderNumber} placed by ${order.customerName} for a total of $${order.grandTotal}.`
+      );
+
       return {
         ...order,
         id: oData.id,
@@ -1052,11 +1116,22 @@ export const dbService = {
         orderStatus: "pending",
         orderNotes: oData.order_notes || undefined,
         createdAt: oData.created_at,
+        statusHistory: initialHistory,
       };
     } else {
       const db = initMockDb();
-      const newOrderId = `ord_${Date.now()}`;
       
+      // 1. Stock Checks
+      for (const item of order.items) {
+        const vRec = db.product_variants.find(
+          (v) => v.productId === item.productId && v.size === item.variantSize
+        );
+        if (!vRec || vRec.stock < item.quantity) {
+          throw new Error(`Insufficient stock for product variant.`);
+        }
+      }
+
+      const newOrderId = `ord_${Date.now()}`;
       const newOrder: Order = {
         ...order,
         id: newOrderId,
@@ -1064,6 +1139,7 @@ export const dbService = {
         paymentStatus: "pending",
         orderStatus: "pending",
         createdAt: new Date().toISOString(),
+        statusHistory: initialHistory,
         items: order.items.map((item, index) => ({
           ...item,
           id: `ord_item_${Date.now()}_${index}`,
@@ -1071,12 +1147,23 @@ export const dbService = {
         })),
       };
 
+      // Decrement stock
       order.items.forEach((item) => {
         const vRec = db.product_variants.find(
           (v) => v.productId === item.productId && v.size === item.variantSize
         );
         if (vRec) {
           vRec.stock = Math.max(0, vRec.stock - item.quantity);
+          if (vRec.stock < 5) {
+            db.notifications.push({
+              id: `notif_${Date.now()}_${Math.random()}`,
+              type: "low_stock",
+              title: "Low Stock Alert",
+              message: `Variant ${vRec.sku} stock level is low: ${vRec.stock} remaining.`,
+              read: false,
+              createdAt: new Date().toISOString(),
+            });
+          }
         }
 
         const prod = db.products.find((p) => p.id === item.productId);
@@ -1087,16 +1174,112 @@ export const dbService = {
       });
 
       db.orders.push(newOrder);
+
+      db.notifications.push({
+        id: `notif_${Date.now()}`,
+        type: "new_order",
+        title: "New Order Placed",
+        message: `Order ${orderNumber} placed by ${order.customerName} for a total of $${order.grandTotal}.`,
+        read: false,
+        createdAt: new Date().toISOString(),
+      });
+
+      db.activity_logs.push({
+        id: `log_${Date.now()}`,
+        userId: order.userId || "guest",
+        action: "Customer placed order",
+        details: `Order Number: ${orderNumber}`,
+        ip: "127.0.0.1",
+        createdAt: new Date().toISOString(),
+      });
+
       writeMockDb(db);
       return newOrder;
     }
   },
 
-  async updateOrderStatus(id: string, status: Order["orderStatus"], trackingNumber?: string): Promise<Order> {
+  async updateOrderStatus(id: string, status: string, trackingNumber?: string, executor: string = "admin"): Promise<Order> {
     if (isSupabaseConfigured() && supabase) {
-      const payload: any = { order_status: status };
+      const { data: currentOrder, error: fetchErr } = await supabase
+        .from("orders")
+        .select("*, order_items(*)")
+        .eq("id", id)
+        .single();
+      if (fetchErr) throw fetchErr;
+
+      const previousStatus = currentOrder.order_status;
+      const history = currentOrder.status_history || [];
+      const newEvent = {
+        status,
+        timestamp: new Date().toISOString(),
+        user: executor,
+        action: `Updated status to ${status}`,
+      };
+      const updatedHistory = [...history, newEvent];
+
+      const isCancellation = status.toLowerCase() === "cancelled" || status.toLowerCase() === "returned" || status.toLowerCase() === "refunded";
+      const wasCancelled = previousStatus === "cancelled";
+
+      if (isCancellation && !wasCancelled) {
+        for (const item of currentOrder.order_items || []) {
+          if (item.variant_id) {
+            const { data: vData } = await supabase
+              .from("product_variants")
+              .select("stock")
+              .eq("id", item.variant_id)
+              .single();
+            if (vData) {
+              const restoredStock = vData.stock + item.quantity;
+              await supabase.from("product_variants").update({ stock: restoredStock }).eq("id", item.variant_id);
+            }
+          }
+          const { data: allVars } = await supabase
+            .from("product_variants")
+            .select("stock")
+            .eq("product_id", item.product_id);
+          if (allVars) {
+            const newCumStock = allVars.reduce((sum, v) => sum + v.stock, 0);
+            await supabase.from("products").update({ stock: newCumStock }).eq("id", item.product_id);
+          }
+        }
+
+        await this.createNotification(
+          "order_cancelled",
+          "Order Cancelled",
+          `Order ${currentOrder.order_number} has been cancelled.`
+        );
+
+        await this.logActivity(executor, "Order cancelled", `Order: ${currentOrder.order_number}`, "127.0.0.1");
+      }
+
+      let mappedOrderStatus = "pending";
+      let mappedPaymentStatus = currentOrder.payment_status;
+
+      if (status === "Order Confirmed" || status === "Processing") {
+        mappedOrderStatus = "confirmed";
+        mappedPaymentStatus = "paid";
+      } else if (status === "Packed" || status === "Ready For Shipment") {
+        mappedOrderStatus = "packed";
+        mappedPaymentStatus = "paid";
+      } else if (status === "Shipped") {
+        mappedOrderStatus = "shipped";
+        mappedPaymentStatus = "paid";
+      } else if (status === "Delivered") {
+        mappedOrderStatus = "delivered";
+        mappedPaymentStatus = "paid";
+      } else if (status === "Cancelled") {
+        mappedOrderStatus = "cancelled";
+      } else if (status === "Returned" || status === "Refunded") {
+        mappedOrderStatus = "cancelled";
+        mappedPaymentStatus = "refunded";
+      }
+
+      const payload: any = {
+        order_status: mappedOrderStatus,
+        payment_status: mappedPaymentStatus,
+        status_history: updatedHistory
+      };
       if (trackingNumber !== undefined) payload.tracking_number = trackingNumber;
-      if (status === "delivered") payload.payment_status = "paid";
 
       const { data, error } = await supabase
         .from("orders")
@@ -1105,8 +1288,6 @@ export const dbService = {
         .select()
         .single();
       if (error) throw error;
-
-      const { data: items } = await supabase.from("order_items").select("*").eq("order_id", id);
 
       return {
         id: data.id,
@@ -1120,11 +1301,12 @@ export const dbService = {
         tax: Number(data.tax),
         grandTotal: Number(data.grand_total),
         paymentStatus: data.payment_status,
-        orderStatus: data.order_status,
+        orderStatus: status,
         shippingAddress: data.shipping_address,
         trackingNumber: data.tracking_number,
         createdAt: data.created_at,
-        items: (items || []).map((item: any) => ({
+        statusHistory: updatedHistory,
+        items: (currentOrder.order_items || []).map((item: any) => ({
           id: item.id,
           orderId: item.order_id,
           productId: item.product_id,
@@ -1141,7 +1323,56 @@ export const dbService = {
       const idx = db.orders.findIndex((o) => o.id === id);
       if (idx === -1) throw new Error("Order not found");
       
+      const currentOrder = db.orders[idx];
+      const previousStatus = currentOrder.orderStatus;
+      const history = currentOrder.statusHistory || [];
+      const newEvent = {
+        status,
+        timestamp: new Date().toISOString(),
+        user: executor,
+        action: `Updated status to ${status}`,
+      };
+      const updatedHistory = [...history, newEvent];
+
+      const isCancellation = status.toLowerCase() === "cancelled" || status.toLowerCase() === "returned" || status.toLowerCase() === "refunded";
+      const wasCancelled = previousStatus.toLowerCase() === "cancelled" || previousStatus.toLowerCase() === "returned" || previousStatus.toLowerCase() === "refunded";
+
+      if (isCancellation && !wasCancelled) {
+        currentOrder.items.forEach((item) => {
+          const vRec = db.product_variants.find(
+            (v) => v.productId === item.productId && v.size === item.variantSize
+          );
+          if (vRec) {
+            vRec.stock = vRec.stock + item.quantity;
+          }
+          const prod = db.products.find((p) => p.id === item.productId);
+          if (prod) {
+            const prodVariants = db.product_variants.filter((v) => v.productId === item.productId);
+            prod.stock = prodVariants.reduce((sum, v) => sum + v.stock, 0);
+          }
+        });
+
+        db.notifications.push({
+          id: `notif_${Date.now()}`,
+          type: "order_cancelled",
+          title: "Order Cancelled",
+          message: `Order ${currentOrder.orderNumber} has been cancelled.`,
+          read: false,
+          createdAt: new Date().toISOString(),
+        });
+
+        db.activity_logs.push({
+          id: `log_${Date.now()}`,
+          userId: executor,
+          action: "Order cancelled",
+          details: `Order: ${currentOrder.orderNumber}`,
+          ip: "127.0.0.1",
+          createdAt: new Date().toISOString(),
+        });
+      }
+
       db.orders[idx].orderStatus = status;
+      db.orders[idx].statusHistory = updatedHistory;
       if (trackingNumber !== undefined) db.orders[idx].trackingNumber = trackingNumber;
       if (status === "delivered") db.orders[idx].paymentStatus = "paid";
 
@@ -1167,5 +1398,351 @@ export const dbService = {
     writeMockDb(db);
     return newUser;
   },
+
+  // --- USER PROFILE & ADDRESS MANAGEMENT ---
+  async updateProfile(userId: string, fullName: string, phone: string, avatarUrl?: string): Promise<UserProfile> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: fullName,
+          phone: phone,
+          avatar: avatarUrl || null
+        })
+        .eq("id", userId)
+        .select()
+        .single();
+      if (error) throw error;
+      return {
+        id: data.id,
+        email: data.email,
+        fullName: data.full_name,
+        phone: data.phone,
+        avatar: data.avatar || undefined,
+        role: data.role,
+        createdAt: data.created_at
+      };
+    } else {
+      const db = initMockDb();
+      const idx = db.users.findIndex((u) => u.id === userId);
+      if (idx === -1) throw new Error("User not found");
+      db.users[idx].fullName = fullName;
+      db.users[idx].phone = phone;
+      if (avatarUrl) db.users[idx].avatar = avatarUrl;
+      writeMockDb(db);
+      return db.users[idx];
+    }
+  },
+
+  async getAddresses(userId: string): Promise<Address[]> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("addresses")
+        .select("*")
+        .eq("user_id", userId)
+        .order("is_default", { ascending: false });
+      if (error) throw error;
+      return (data || []).map((a: any) => ({
+        id: a.id,
+        userId: a.user_id,
+        name: a.name,
+        phone: a.phone,
+        address: a.address,
+        city: a.city,
+        state: a.state,
+        country: a.country,
+        pincode: a.pincode,
+        isDefault: a.is_default
+      }));
+    } else {
+      const db = initMockDb();
+      return db.addresses.filter((a) => a.userId === userId);
+    }
+  },
+
+  async createAddress(address: Omit<Address, "id">): Promise<Address> {
+    if (isSupabaseConfigured() && supabase) {
+      if (address.isDefault) {
+        // Remove default from other addresses
+        await supabase
+          .from("addresses")
+          .update({ is_default: false })
+          .eq("user_id", address.userId);
+      }
+      const { data, error } = await supabase
+        .from("addresses")
+        .insert([{
+          user_id: address.userId,
+          name: address.name,
+          phone: address.phone,
+          address: address.address,
+          city: address.city,
+          state: address.state,
+          country: address.country,
+          pincode: address.pincode,
+          is_default: address.isDefault
+        }])
+        .select()
+        .single();
+      if (error) throw error;
+      return {
+        id: data.id,
+        userId: data.user_id,
+        name: data.name,
+        phone: data.phone,
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        country: data.country,
+        pincode: data.pincode,
+        isDefault: data.is_default
+      };
+    } else {
+      const db = initMockDb();
+      if (address.isDefault) {
+        db.addresses.forEach((a) => {
+          if (a.userId === address.userId) a.isDefault = false;
+        });
+      }
+      const newAddress: Address = {
+        ...address,
+        id: `addr_${Date.now()}`
+      };
+      db.addresses.push(newAddress);
+      writeMockDb(db);
+      return newAddress;
+    }
+  },
+
+  async updateAddress(id: string, address: Omit<Address, "id" | "userId">): Promise<Address> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data: current } = await supabase.from("addresses").select("user_id").eq("id", id).single();
+      if (address.isDefault && current) {
+        await supabase
+          .from("addresses")
+          .update({ is_default: false })
+          .eq("user_id", current.user_id);
+      }
+      const { data, error } = await supabase
+        .from("addresses")
+        .update({
+          name: address.name,
+          phone: address.phone,
+          address: address.address,
+          city: address.city,
+          state: address.state,
+          country: address.country,
+          pincode: address.pincode,
+          is_default: address.isDefault
+        })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return {
+        id: data.id,
+        userId: data.user_id,
+        name: data.name,
+        phone: data.phone,
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        country: data.country,
+        pincode: data.pincode,
+        isDefault: data.is_default
+      };
+    } else {
+      const db = initMockDb();
+      const idx = db.addresses.findIndex((a) => a.id === id);
+      if (idx === -1) throw new Error("Address not found");
+      const userId = db.addresses[idx].userId;
+      if (address.isDefault) {
+        db.addresses.forEach((a) => {
+          if (a.userId === userId) a.isDefault = false;
+        });
+      }
+      db.addresses[idx] = {
+        ...db.addresses[idx],
+        ...address
+      };
+      writeMockDb(db);
+      return db.addresses[idx];
+    }
+  },
+
+  async deleteAddress(id: string, userId: string): Promise<boolean> {
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase
+        .from("addresses")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
+      if (error) throw error;
+      return true;
+    } else {
+      const db = initMockDb();
+      const initialLength = db.addresses.length;
+      db.addresses = db.addresses.filter((a) => a.id !== id || a.userId !== userId);
+      writeMockDb(db);
+      return db.addresses.length < initialLength;
+    }
+  },
+
+  async setDefaultAddress(id: string, userId: string): Promise<boolean> {
+    if (isSupabaseConfigured() && supabase) {
+      await supabase.from("addresses").update({ is_default: false }).eq("user_id", userId);
+      const { error } = await supabase.from("addresses").update({ is_default: true }).eq("id", id).eq("user_id", userId);
+      if (error) throw error;
+      return true;
+    } else {
+      const db = initMockDb();
+      db.addresses.forEach((a) => {
+        if (a.userId === userId) {
+          a.isDefault = a.id === id;
+        }
+      });
+      writeMockDb(db);
+      return true;
+    }
+  },
+
+  // --- NOTIFICATIONS INFRASTRUCTURE ---
+  async getNotifications(): Promise<Notification[]> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data } = await supabase
+        .from("notifications")
+        .select("*")
+        .order("created_at", { ascending: false });
+      return (data || []).map((n: any) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        read: n.read,
+        createdAt: n.created_at
+      }));
+    } else {
+      const db = initMockDb();
+      return [...db.notifications].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+  },
+
+  async createNotification(type: Notification["type"], title: string, message: string): Promise<Notification> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("notifications")
+        .insert([{
+          type,
+          title,
+          message,
+          read: false
+        }])
+        .select()
+        .single();
+      if (error) throw error;
+      return {
+        id: data.id,
+        type: data.type,
+        title: data.title,
+        message: data.message,
+        read: data.read,
+        createdAt: data.created_at
+      };
+    } else {
+      const db = initMockDb();
+      const newNotif: Notification = {
+        id: `notif_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        type,
+        title,
+        message,
+        read: false,
+        createdAt: new Date().toISOString()
+      };
+      db.notifications.push(newNotif);
+      writeMockDb(db);
+      return newNotif;
+    }
+  },
+
+  async markNotificationAsRead(id: string): Promise<boolean> {
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ read: true })
+        .eq("id", id);
+      if (error) throw error;
+      return true;
+    } else {
+      const db = initMockDb();
+      const idx = db.notifications.findIndex((n) => n.id === id);
+      if (idx !== -1) {
+        db.notifications[idx].read = true;
+        writeMockDb(db);
+        return true;
+      }
+      return false;
+    }
+  },
+
+  async getUnreadNotificationsCount(): Promise<number> {
+    if (isSupabaseConfigured() && supabase) {
+      const { count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("read", false);
+      return count || 0;
+    } else {
+      const db = initMockDb();
+      return db.notifications.filter((n) => !n.read).length;
+    }
+  },
+
+  // --- REPORTING & EXPORT ---
+  async getExportData(type: "orders" | "customers" | "products"): Promise<string> {
+    if (type === "orders") {
+      const orders = await this.getOrders();
+      const headers = ["Order ID", "Order Number", "Customer Name", "Customer Email", "Subtotal", "Grand Total", "Order Status", "Payment Status", "Created Date"];
+      const rows = orders.map((o) => [
+        o.id,
+        o.orderNumber,
+        o.customerName,
+        o.customerEmail,
+        o.subtotal,
+        o.grandTotal,
+        o.orderStatus,
+        o.paymentStatus,
+        o.createdAt
+      ]);
+      return [headers.join(","), ...rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))].join("\n");
+    } else if (type === "customers") {
+      const db = initMockDb();
+      // Combine mock and Supabase if needed, here we export profiles/users
+      const users = isSupabaseConfigured() && supabase 
+        ? (await supabase.from("profiles").select("*")).data || []
+        : db.users;
+      const headers = ["User ID", "Email", "Full Name", "Role", "Created At"];
+      const rows = users.map((u: any) => [
+        u.id,
+        u.email,
+        u.full_name || u.fullName,
+        u.role,
+        u.created_at || u.createdAt
+      ]);
+      return [headers.join(","), ...rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))].join("\n");
+    } else {
+      const prods = await this.getProducts();
+      const headers = ["Product ID", "SKU", "Product Name", "Price", "Stock", "Active", "Created Date"];
+      const rows = prods.map((p) => [
+        p.id,
+        p.sku,
+        p.productName || p.name,
+        p.price,
+        p.stock,
+        p.active,
+        p.createdAt
+      ]);
+      return [headers.join(","), ...rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))].join("\n");
+    }
+  }
 };
 export default dbService;
