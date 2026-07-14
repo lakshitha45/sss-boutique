@@ -108,7 +108,7 @@ export const Header: React.FC = () => {
                 <img
                   src={brand.logoUrl}
                   alt={brand.brandName}
-                  className="h-20 w-auto object-contain scale-[1.35] transform origin-center -translate-x-3"
+                  className="h-20 w-auto object-contain scale-[1.35] transform origin-center -translate-x-8"
                   onError={(e) => {
                     e.currentTarget.style.display = "none";
                     const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
