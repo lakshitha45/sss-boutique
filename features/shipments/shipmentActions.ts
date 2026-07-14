@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { dbService } from "@/services/dbService";
+import { NotificationService } from "@/services/notificationService";
 import { Shipment } from "@/types";
 
 export async function fetchShipments(): Promise<Shipment[]> {
@@ -27,6 +28,17 @@ export async function createNewShipment(
 ): Promise<{ success: boolean; shipment?: Shipment; error?: string }> {
   try {
     const data = await dbService.createShipment(shipment);
+    
+    // Trigger notification
+    try {
+      const order = await dbService.getOrderById(shipment.orderId);
+      if (order) {
+        await NotificationService.sendShipmentCreated(order, data);
+      }
+    } catch (ne) {
+      console.error("Failed to trigger shipment creation email:", ne);
+    }
+
     revalidatePath("/admin/shipments");
     revalidatePath("/admin/orders");
     revalidatePath("/orders");
@@ -41,7 +53,24 @@ export async function modifyShipment(
   updates: Partial<Shipment>
 ): Promise<{ success: boolean; shipment?: Shipment; error?: string }> {
   try {
+    // Load current shipment state to fetch order info
+    const shipments = await dbService.getShipments();
+    const current = shipments.find(s => s.id === id);
+    
     const data = await dbService.updateShipment(id, updates);
+    
+    // Trigger notification if status is updated
+    if (current && updates.status && updates.status !== current.status) {
+      try {
+        const order = await dbService.getOrderById(current.orderId);
+        if (order) {
+          await NotificationService.sendShipmentUpdate(order, data);
+        }
+      } catch (ne) {
+        console.error("Failed to trigger shipment update email:", ne);
+      }
+    }
+
     revalidatePath("/admin/shipments");
     revalidatePath("/admin/orders");
     revalidatePath("/orders");

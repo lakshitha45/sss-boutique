@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { dbService } from "@/services/dbService";
+import { NotificationService } from "@/services/notificationService";
 import { Order } from "@/types";
 
 export async function placeOrder(
@@ -9,6 +10,12 @@ export async function placeOrder(
 ): Promise<{ success: boolean; order?: Order; error?: string }> {
   try {
     const order = await dbService.createOrder(orderData);
+    
+    try {
+      await NotificationService.sendOrderConfirmation(order);
+    } catch (e) {
+      console.error("Failed to send order confirmation email:", e);
+    }
     
     revalidatePath("/admin/orders");
     return { success: true, order };
@@ -35,6 +42,13 @@ export async function changeOrderStatus(
 ): Promise<{ success: boolean; order?: Order; error?: string }> {
   try {
     const order = await dbService.updateOrderStatus(id, status, trackingNumber, executor);
+    
+    try {
+      await NotificationService.sendOrderStatusUpdate(order, status);
+    } catch (e) {
+      console.error("Failed to send order status update email:", e);
+    }
+
     revalidatePath("/admin/orders");
     revalidatePath("/orders");
     return { success: true, order };

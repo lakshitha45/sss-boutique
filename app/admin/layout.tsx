@@ -41,6 +41,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [notificationsOpen, setNotificationsOpen] = React.useState(false);
   const [notifications, setNotifications] = React.useState<any[]>([]);
+  const [adminNotifSearch, setAdminNotifSearch] = React.useState("");
+  const [adminNotifTab, setAdminNotifTab] = React.useState("all");
 
   const loadNotifications = async () => {
     try {
@@ -318,40 +320,118 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -8, scale: 0.96 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute right-0 top-full mt-2 w-80 bg-[#141414] border border-[#1F1F1F] rounded-xl shadow-2xl z-50 overflow-hidden"
+                      className="absolute right-0 top-full mt-2 w-80 bg-[#141414] border border-[#1F1F1F] rounded-xl shadow-2xl z-50 overflow-hidden text-xs"
                     >
-                      <div className="px-4 py-3 border-b border-[#1F1F1F] flex justify-between items-center">
-                        <h3 className="text-[11px] font-bold text-white uppercase tracking-wider">Notifications</h3>
-                        <span className="text-[9px] text-zinc-500 font-mono">
+                      <div className="px-4 py-3 border-b border-[#1F1F1F] flex justify-between items-center bg-[#171717]">
+                        <h3 className="text-[10px] font-bold text-white uppercase tracking-wider">Notifications</h3>
+                        <span className="text-[9px] text-accent font-mono font-bold">
                           {notifications.filter((n) => !n.read).length} unread
                         </span>
                       </div>
-                      <div className="max-h-64 overflow-y-auto">
-                        {notifications.length === 0 ? (
-                          <div className="px-4 py-6 text-center text-zinc-500 font-light">
-                            No notifications at this time.
-                          </div>
-                        ) : (
-                          notifications.map((n) => (
-                            <div
-                              key={n.id}
-                              onClick={async () => {
-                                await markNotificationAsRead(n.id);
-                                loadNotifications();
-                              }}
-                              className={`px-4 py-3 hover:bg-[#1A1A1A] transition-colors border-b border-[#1A1A1A] last:border-b-0 cursor-pointer ${
-                                !n.read ? "bg-accent/5 border-l-2 border-l-accent" : ""
-                              }`}
-                            >
-                              <p className="text-[11px] text-zinc-200 leading-relaxed font-semibold">{n.title}</p>
-                              <p className="text-[10px] text-zinc-400 leading-relaxed mt-0.5">{n.message}</p>
-                              <span className="text-[9px] text-zinc-500 mt-1 block">{new Date(n.createdAt).toLocaleString()}</span>
-                            </div>
-                          ))
+
+                      {/* Filter Search Input */}
+                      <div className="px-3 py-2 border-b border-[#1F1F1F] bg-[#111111] flex items-center space-x-1.5">
+                        <Search className="w-3.5 h-3.5 text-zinc-550 flex-shrink-0" />
+                        <input
+                          type="text"
+                          value={adminNotifSearch}
+                          onChange={(e) => setAdminNotifSearch(e.target.value)}
+                          placeholder="Search alerts..."
+                          className="w-full bg-transparent text-[10px] text-white focus:outline-none placeholder-zinc-650"
+                        />
+                        {adminNotifSearch && (
+                          <button onClick={() => setAdminNotifSearch("")} className="text-zinc-550 hover:text-white text-[9px] font-bold">CLEAR</button>
                         )}
                       </div>
-                      <div className="px-4 py-2.5 border-t border-[#1F1F1F] text-center">
-                        <span onClick={() => { loadNotifications(); }} className="text-[10px] text-accent font-semibold cursor-pointer hover:underline">
+
+                      {/* Filter Tabs */}
+                      <div className="px-2 py-1.5 border-b border-[#1F1F1F] bg-[#141414] flex items-center space-x-1 overflow-x-auto text-[8px] font-bold uppercase tracking-wider text-zinc-400">
+                        {[
+                          { id: "all", label: "All" },
+                          { id: "orders", label: "Orders" },
+                          { id: "shipments", label: "Shipments" },
+                          { id: "stock", label: "Stock" }
+                        ].map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => setAdminNotifTab(t.id)}
+                            className={`px-2 py-1 rounded transition ${
+                              adminNotifTab === t.id ? "bg-accent text-zinc-950" : "hover:bg-[#1C1C1C] hover:text-white"
+                            }`}
+                          >
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="max-h-64 overflow-y-auto divide-y divide-[#1A1A1A]">
+                        {notifications.filter(n => {
+                          const matchesSearch = n.title.toLowerCase().includes(adminNotifSearch.toLowerCase()) ||
+                                               n.message.toLowerCase().includes(adminNotifSearch.toLowerCase());
+                          
+                          let matchesTab = true;
+                          if (adminNotifTab === "orders") {
+                            matchesTab = n.type.includes("order");
+                          } else if (adminNotifTab === "shipments") {
+                            matchesTab = n.type.includes("shipment");
+                          } else if (adminNotifTab === "stock") {
+                            matchesTab = n.type === "low_stock" || n.type === "inventory_updated";
+                          }
+                          
+                          return matchesSearch && matchesTab;
+                        }).length === 0 ? (
+                          <div className="px-4 py-8 text-center text-zinc-500 font-light text-[10px]">
+                            No matching alerts.
+                          </div>
+                        ) : (
+                          notifications.filter(n => {
+                            const matchesSearch = n.title.toLowerCase().includes(adminNotifSearch.toLowerCase()) ||
+                                                 n.message.toLowerCase().includes(adminNotifSearch.toLowerCase());
+                            
+                            let matchesTab = true;
+                            if (adminNotifTab === "orders") {
+                              matchesTab = n.type.includes("order");
+                            } else if (adminNotifTab === "shipments") {
+                              matchesTab = n.type.includes("shipment");
+                            } else if (adminNotifTab === "stock") {
+                              matchesTab = n.type === "low_stock" || n.type === "inventory_updated";
+                            }
+                            
+                            return matchesSearch && matchesTab;
+                          }).map((n) => {
+                            // Badge color
+                            let badgeStyle = "bg-zinc-900 border-zinc-800 text-zinc-400";
+                            if (n.type.includes("cancelled")) badgeStyle = "bg-rose-950/20 border-rose-900/30 text-rose-400";
+                            else if (n.type.includes("new_order")) badgeStyle = "bg-emerald-950/20 border-emerald-900/30 text-emerald-400";
+                            else if (n.type.includes("low_stock")) badgeStyle = "bg-amber-950/20 border-amber-900/30 text-amber-400";
+                            else if (n.type.includes("shipment")) badgeStyle = "bg-indigo-950/20 border-indigo-900/30 text-indigo-400";
+
+                            return (
+                              <div
+                                key={n.id}
+                                onClick={async () => {
+                                  await markNotificationAsRead(n.id);
+                                  loadNotifications();
+                                }}
+                                className={`px-4 py-3 hover:bg-[#1A1A1A] transition-colors last:border-b-0 cursor-pointer ${
+                                  !n.read ? "bg-[#181818]" : ""
+                                }`}
+                              >
+                                <div className="flex justify-between items-start gap-2">
+                                  <p className="text-[10px] text-zinc-200 leading-relaxed font-semibold">{n.title}</p>
+                                  <span className={`px-1.5 py-0.2 text-[7px] uppercase tracking-wider font-bold border rounded-sm flex-shrink-0 ${badgeStyle}`}>
+                                    {n.type.replace("_", " ")}
+                                  </span>
+                                </div>
+                                <p className="text-[9px] text-zinc-400 leading-relaxed mt-0.5">{n.message}</p>
+                                <span className="text-[8px] text-zinc-550 mt-1 block font-mono">{new Date(n.createdAt).toLocaleString()}</span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                      <div className="px-4 py-2.5 border-t border-[#1F1F1F] text-center bg-[#111111]">
+                        <span onClick={() => { loadNotifications(); }} className="text-[9px] text-accent font-semibold cursor-pointer hover:underline uppercase tracking-wider">
                           Refresh List
                         </span>
                       </div>

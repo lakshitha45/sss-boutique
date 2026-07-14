@@ -220,13 +220,59 @@ export interface ActivityLog {
   createdAt: string;
 }
 
+export type NotificationType =
+  | "new_order"
+  | "order_confirmed"
+  | "order_packed"
+  | "order_shipped"
+  | "order_delivered"
+  | "order_cancelled"
+  | "shipment_created"
+  | "shipment_updated"
+  | "shipment_delivered"
+  | "low_stock"
+  | "inventory_updated"
+  | "customer_registered"
+  | "welcome"
+  | "password_reset";
+
+export type NotificationChannel = "email" | "whatsapp" | "in_app";
+
 export interface Notification {
   id: string;
-  type: "new_order" | "order_cancelled" | "low_stock" | "inventory_updated" | "customer_registered";
+  type: NotificationType;
   title: string;
   message: string;
   read: boolean;
+  userId?: string;
+  orderId?: string;
+  channel?: NotificationChannel;
+  sentAt?: string;
+  readAt?: string;
   createdAt: string;
+}
+
+export interface NotificationLog {
+  id: string;
+  notificationId?: string;
+  channel: NotificationChannel;
+  provider: string;
+  recipientEmail?: string;
+  recipientPhone?: string;
+  eventType: string;
+  status: "pending" | "sent" | "failed" | "retried";
+  errorMessage?: string;
+  attempts: number;
+  createdAt: string;
+}
+
+export interface NotificationPreferences {
+  id: string;
+  userId: string;
+  orderEmails: boolean;
+  shipmentEmails: boolean;
+  promotionalEmails: boolean;
+  accountEmails: boolean;
 }
 
 // ── White-Label Brand Management System ──────────────────────────────

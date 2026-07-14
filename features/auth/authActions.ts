@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { dbService } from "@/services/dbService";
+import { NotificationService } from "@/services/notificationService";
 import { UserProfile } from "@/types";
 
 const SESSION_COOKIE_NAME = "sss_boutique_session";
@@ -169,6 +170,12 @@ export async function register(
         maxAge: 60 * 60 * 24 * 7, // 1 week
       });
 
+      try {
+        await NotificationService.sendWelcomeEmail(fullName, email, userProfile.id);
+      } catch (ne) {
+        console.error("Failed to send welcome email:", ne);
+      }
+
       return { success: true, user: userProfile };
     } else {
       // Mock Mode
@@ -194,6 +201,12 @@ export async function register(
         maxAge: 60 * 60 * 24 * 7, // 1 week
       });
 
+      try {
+        await NotificationService.sendWelcomeEmail(fullName, email, newUser.id);
+      } catch (ne) {
+        console.error("Failed to send welcome email:", ne);
+      }
+
       return { success: true, user: newUser };
     }
   } catch (err) {
@@ -212,4 +225,41 @@ export async function logout(): Promise<{ success: boolean }> {
   cookieStore.delete(SESSION_COOKIE_NAME);
   
   return { success: true };
+}
+
+export async function requestPasswordReset(email: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    let customerName = "Valued Customer";
+    
+    if (isSupabaseConfigured() && supabase) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("email", email)
+        .maybeSingle();
+      if (profile) customerName = profile.full_name;
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: "https://sssboutique.com/reset-password",
+      });
+      if (error) return { success: false, error: error.message };
+    } else {
+      const users = await dbService.getMockUsers();
+      const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+      if (user) customerName = user.fullName;
+    }
+    
+    const resetToken = `tok_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const resetLink = `https://sssboutique.com/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+    
+    try {
+      await NotificationService.sendPasswordResetEmail(customerName, email, resetLink);
+    } catch (ne) {
+      console.error("Failed to send password reset email:", ne);
+    }
+    
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to request password reset." };
+  }
 }

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import { Product, Category, ProductImage, ProductVariant, Order, UserProfile, ActivityLog, Address, Notification, Shipment } from "@/types";
+import { Product, Category, ProductImage, ProductVariant, Order, UserProfile, ActivityLog, Address, Notification, Shipment, NotificationLog, NotificationPreferences, NotificationType, NotificationChannel } from "@/types";
 
 const MOCK_DB_DIR = path.join(process.cwd(), "data");
 const MOCK_DB_PATH = path.join(MOCK_DB_DIR, "db.json");
@@ -143,6 +143,8 @@ interface MockSchema {
   notifications: Notification[];
   addresses: Address[];
   shipments: Shipment[];
+  notification_logs: NotificationLog[];
+  notification_preferences: NotificationPreferences[];
 }
 
 const initMockDb = (): MockSchema => {
@@ -236,6 +238,8 @@ const initMockDb = (): MockSchema => {
       notifications: [],
       addresses: [],
       shipments: [],
+      notification_logs: [],
+      notification_preferences: [],
     };
 
     fs.writeFileSync(MOCK_DB_PATH, JSON.stringify(initialData, null, 2), "utf8");
@@ -258,6 +262,8 @@ const initMockDb = (): MockSchema => {
       notifications: [],
       addresses: [],
       shipments: [],
+      notification_logs: [],
+      notification_preferences: [],
     };
   }
 };
@@ -1009,6 +1015,11 @@ export const dbService = {
     }
   },
 
+  async getOrderById(id: string): Promise<Order | null> {
+    const orders = await this.getOrders();
+    return orders.find((o) => o.id === id) || null;
+  },
+
   async createOrder(order: Omit<Order, "id" | "createdAt" | "orderNumber" | "paymentStatus" | "orderStatus">): Promise<Order> {
     const orderNumber = `SSS-ORD-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
     const initialHistory = [{
@@ -1630,7 +1641,15 @@ export const dbService = {
     }
   },
 
-  async createNotification(type: Notification["type"], title: string, message: string): Promise<Notification> {
+  async createNotification(
+    type: NotificationType,
+    title: string,
+    message: string,
+    userId?: string,
+    orderId?: string,
+    channel?: NotificationChannel
+  ): Promise<Notification> {
+    const timestamp = new Date().toISOString();
     if (isSupabaseConfigured() && supabase) {
       const { data, error } = await supabase
         .from("notifications")
@@ -1638,7 +1657,10 @@ export const dbService = {
           type,
           title,
           message,
-          read: false
+          read: false,
+          user_id: userId || null,
+          order_id: orderId || null,
+          channel: channel || "in_app"
         }])
         .select()
         .single();
@@ -1649,6 +1671,9 @@ export const dbService = {
         title: data.title,
         message: data.message,
         read: data.read,
+        userId: data.user_id,
+        orderId: data.order_id,
+        channel: data.channel,
         createdAt: data.created_at
       };
     } else {
@@ -1659,7 +1684,10 @@ export const dbService = {
         title,
         message,
         read: false,
-        createdAt: new Date().toISOString()
+        userId,
+        orderId,
+        channel: channel || "in_app",
+        createdAt: timestamp
       };
       db.notifications.push(newNotif);
       writeMockDb(db);
@@ -1671,7 +1699,7 @@ export const dbService = {
     if (isSupabaseConfigured() && supabase) {
       const { error } = await supabase
         .from("notifications")
-        .update({ read: true })
+        .update({ read: true, read_at: new Date().toISOString() })
         .eq("id", id);
       if (error) throw error;
       return true;
@@ -1680,6 +1708,7 @@ export const dbService = {
       const idx = db.notifications.findIndex((n) => n.id === id);
       if (idx !== -1) {
         db.notifications[idx].read = true;
+        db.notifications[idx].readAt = new Date().toISOString();
         writeMockDb(db);
         return true;
       }
@@ -1692,11 +1721,179 @@ export const dbService = {
       const { count } = await supabase
         .from("notifications")
         .select("*", { count: "exact", head: true })
-        .eq("read", false);
+        .eq("read", false)
+        .is("user_id", null); // Admin notifications are those without user_id
       return count || 0;
     } else {
       const db = initMockDb();
-      return db.notifications.filter((n) => !n.read).length;
+      return db.notifications.filter((n) => !n.read && !n.userId).length;
+    }
+  },
+
+  async getNotificationsByUserId(userId: string): Promise<Notification[]> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data || []).map((n: any) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        read: n.read,
+        userId: n.user_id,
+        orderId: n.order_id,
+        channel: n.channel,
+        createdAt: n.created_at
+      }));
+    } else {
+      const db = initMockDb();
+      return db.notifications
+        .filter((n) => n.userId === userId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+  },
+
+  async getNotificationLogs(): Promise<NotificationLog[]> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("notification_logs")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data || []).map((l: any) => ({
+        id: l.id,
+        notificationId: l.notification_id,
+        channel: l.channel,
+        provider: l.provider,
+        recipientEmail: l.recipient_email,
+        recipientPhone: l.recipient_phone,
+        eventType: l.event_type,
+        status: l.status,
+        errorMessage: l.error_message,
+        attempts: l.attempts,
+        createdAt: l.created_at
+      }));
+    } else {
+      const db = initMockDb();
+      return [...(db.notification_logs || [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+  },
+
+  async createNotificationLog(log: Omit<NotificationLog, "id" | "createdAt">): Promise<NotificationLog> {
+    const timestamp = new Date().toISOString();
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("notification_logs")
+        .insert([{
+          notification_id: log.notificationId || null,
+          channel: log.channel,
+          provider: log.provider,
+          recipient_email: log.recipientEmail || null,
+          recipient_phone: log.recipientPhone || null,
+          event_type: log.eventType,
+          status: log.status,
+          error_message: log.errorMessage || null,
+          attempts: log.attempts
+        }])
+        .select()
+        .single();
+      if (error) throw error;
+      return {
+        id: data.id,
+        notificationId: data.notification_id,
+        channel: data.channel,
+        provider: data.provider,
+        recipientEmail: data.recipient_email,
+        recipientPhone: data.recipient_phone,
+        eventType: data.event_type,
+        status: data.status,
+        errorMessage: data.error_message,
+        attempts: data.attempts,
+        createdAt: data.created_at
+      };
+    } else {
+      const db = initMockDb();
+      const newLog: NotificationLog = {
+        ...log,
+        id: `log_${Date.now()}`,
+        createdAt: timestamp
+      };
+      if (!db.notification_logs) db.notification_logs = [];
+      db.notification_logs.push(newLog);
+      writeMockDb(db);
+      return newLog;
+    }
+  },
+
+  async getNotificationPreferences(userId: string): Promise<NotificationPreferences | null> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("notification_preferences")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      return {
+        id: data.id,
+        userId: data.user_id,
+        orderEmails: data.order_emails,
+        shipmentEmails: data.shipment_emails,
+        promotionalEmails: data.promotional_emails,
+        accountEmails: data.account_emails
+      };
+    } else {
+      const db = initMockDb();
+      if (!db.notification_preferences) db.notification_preferences = [];
+      return db.notification_preferences.find((p) => p.userId === userId) || null;
+    }
+  },
+
+  async upsertNotificationPreferences(userId: string, preferences: Partial<NotificationPreferences>): Promise<NotificationPreferences> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("notification_preferences")
+        .upsert({
+          user_id: userId,
+          order_emails: preferences.orderEmails ?? true,
+          shipment_emails: preferences.shipmentEmails ?? true,
+          promotional_emails: preferences.promotionalEmails ?? true,
+          account_emails: preferences.accountEmails ?? true
+        }, { onConflict: "user_id" })
+        .select()
+        .single();
+      if (error) throw error;
+      return {
+        id: data.id,
+        userId: data.user_id,
+        orderEmails: data.order_emails,
+        shipmentEmails: data.shipment_emails,
+        promotionalEmails: data.promotional_emails,
+        accountEmails: data.account_emails
+      };
+    } else {
+      const db = initMockDb();
+      if (!db.notification_preferences) db.notification_preferences = [];
+      const idx = db.notification_preferences.findIndex((p) => p.userId === userId);
+      const updated: NotificationPreferences = {
+        id: idx !== -1 ? db.notification_preferences[idx].id : `pref_${Date.now()}`,
+        userId,
+        orderEmails: preferences.orderEmails ?? true,
+        shipmentEmails: preferences.shipmentEmails ?? true,
+        promotionalEmails: preferences.promotionalEmails ?? true,
+        accountEmails: preferences.accountEmails ?? true
+      };
+      if (idx !== -1) {
+        db.notification_preferences[idx] = updated;
+      } else {
+        db.notification_preferences.push(updated);
+      }
+      writeMockDb(db);
+      return updated;
     }
   },
 

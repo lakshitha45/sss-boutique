@@ -4,13 +4,14 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "@/features/auth/AuthContext";
 import { fetchOrders, fetchAddresses, createAddress, updateAddress, deleteAddress, setDefaultAddress, updateProfile } from "@/features/orders/orderActions";
 import { fetchShipmentByOrderId } from "@/features/shipments/shipmentActions";
-import { Order, Product } from "@/types";
+import { fetchUserNotifications, markUserNotificationRead, fetchNotificationPreferences, saveNotificationPreferences } from "@/features/notifications/notificationActions";
+import { Order, Product, Notification, NotificationPreferences } from "@/types";
 import { formatPrice } from "@/utils";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, Package, Truck, Heart, User, MapPin, Key, LogOut, CheckCircle2, ShoppingBag, X, Clock } from "lucide-react";
+import { ChevronRight, Package, Truck, Heart, User, MapPin, Key, LogOut, CheckCircle2, ShoppingBag, X, Clock, Bell, Settings } from "lucide-react";
 import { fetchProducts } from "@/features/products/productActions";
 import { useCart } from "@/features/cart/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,12 +22,27 @@ export default function AccountDashboardPage() {
   const router = useRouter();
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<"orders" | "wishlist" | "addresses" | "profile">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "wishlist" | "addresses" | "profile" | "notifications">("orders");
 
   // Orders & Shipments State
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [shipmentsData, setShipmentsData] = useState<Record<string, any>>({});
+
+  // Notifications State
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
+  const [notifSearch, setNotifSearch] = useState("");
+  const [notifFilter, setNotifFilter] = useState("all");
+  const [userPrefs, setUserPrefs] = useState<NotificationPreferences>({
+    id: "",
+    userId: "",
+    orderEmails: true,
+    shipmentEmails: true,
+    promotionalEmails: true,
+    accountEmails: true
+  });
+  const [savingPrefs, setSavingPrefs] = useState(false);
 
   // Wishlist State
   const [wishlistItems, setWishlistItems] = useState<Product[]>([]);
@@ -148,6 +164,27 @@ export default function AccountDashboardPage() {
     if (user) {
       setProfileName(user.fullName || "");
       setProfilePhone(user.phone || "");
+    }
+  }, [user]);
+
+  // Load notifications and preferences
+  useEffect(() => {
+    async function loadNotificationsAndPrefs() {
+      if (!user) return;
+      setLoadingNotifs(true);
+      try {
+        const notifs = await fetchUserNotifications(user.id);
+        setNotifications(notifs);
+        const prefs = await fetchNotificationPreferences(user.id);
+        if (prefs) setUserPrefs(prefs);
+      } catch (err) {
+        console.error("Failed to load notifications or preferences:", err);
+      } finally {
+        setLoadingNotifs(false);
+      }
+    }
+    if (user) {
+      loadNotificationsAndPrefs();
     }
   }, [user]);
 
@@ -284,6 +321,31 @@ export default function AccountDashboardPage() {
     router.push("/");
   };
 
+  const handleTogglePreference = async (key: keyof NotificationPreferences) => {
+    if (!user) return;
+    setSavingPrefs(true);
+    const updated = {
+      ...userPrefs,
+      [key]: !userPrefs[key]
+    };
+    setUserPrefs(updated as any);
+    const res = await saveNotificationPreferences(user.id, updated);
+    setSavingPrefs(false);
+    if (res.success) {
+      showToast("Preferences updated successfully.");
+    } else {
+      showToast(res.error || "Failed to update preferences.");
+    }
+  };
+
+  const handleMarkNotifRead = async (notifId: string) => {
+    if (!user) return;
+    const res = await markUserNotificationRead(notifId, user.id);
+    if (res.success) {
+      setNotifications(notifications.map(n => n.id === notifId ? { ...n, read: true } : n));
+    }
+  };
+
   const getStatusColor = (status: string) => {
     const s = status.toLowerCase();
     if (s.includes("pending")) return "bg-amber-950/40 text-amber-400 border-amber-900/50";
@@ -370,6 +432,23 @@ export default function AccountDashboardPage() {
                 >
                   <User className="w-4 h-4 text-accent" />
                   <span>Profile Settings</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("notifications")}
+                  className={`flex items-center justify-between px-4 py-3 border transition ${
+                    activeTab === "notifications" ? "bg-[#1C1C1C] text-white border-accent" : "bg-[#121212]/50 border-[#1A1A1A] hover:bg-[#121212]"
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <Bell className="w-4 h-4 text-accent" />
+                    <span>Notifications</span>
+                  </div>
+                  {notifications.filter((n) => !n.read).length > 0 && (
+                    <span className="bg-accent text-zinc-950 font-bold font-mono text-[9px] rounded-full px-1.5 py-0.2">
+                      {notifications.filter((n) => !n.read).length}
+                    </span>
+                  )}
                 </button>
 
                 <button
@@ -785,6 +864,146 @@ export default function AccountDashboardPage() {
 
                     <button type="submit" className="bg-accent text-zinc-950 px-6 py-2.5 hover:bg-white text-[10px] font-bold uppercase tracking-wider transition">Change Password</button>
                   </form>
+                </div>
+              )}
+
+              {/* TAB 5: CUSTOMER NOTIFICATION CENTER */}
+              {activeTab === "notifications" && (
+                <div className="space-y-8 animate-fadeIn">
+                  <div className="border-b border-[#1A1A1A] pb-4 flex flex-col sm:flex-row justify-between sm:items-end gap-4">
+                    <div>
+                      <h2 className="font-serif text-xl font-light text-white tracking-wide">My Notifications</h2>
+                      <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Real-time alerts, orders, and delivery timelines</p>
+                    </div>
+
+                    {/* Filter and Search */}
+                    <div className="flex items-center space-x-2 text-xs">
+                      <select
+                        value={notifFilter}
+                        onChange={(e) => setNotifFilter(e.target.value)}
+                        className="bg-[#0D0D0D] border border-[#1F1F1F] px-2.5 py-1.5 text-zinc-350 focus:outline-none focus:border-accent"
+                      >
+                        <option value="all">All Alerts</option>
+                        <option value="unread">Unread</option>
+                        <option value="read">Read</option>
+                        <option value="order">Orders Only</option>
+                        <option value="shipment">Shipments Only</option>
+                      </select>
+
+                      <input
+                        type="text"
+                        value={notifSearch}
+                        onChange={(e) => setNotifSearch(e.target.value)}
+                        placeholder="Search alerts..."
+                        className="bg-[#0D0D0D] border border-[#1F1F1F] px-2.5 py-1.5 text-white focus:outline-none focus:border-accent placeholder-zinc-650"
+                      />
+                    </div>
+                  </div>
+
+                  {/* PREFERENCES PANEL */}
+                  <div className="border border-[#1A1A1A] bg-[#121212] p-5 space-y-4">
+                    <h3 className="font-serif text-xs text-white font-bold uppercase tracking-wider flex items-center space-x-1.5">
+                      <Settings className="w-4 h-4 text-accent" />
+                      <span>Email Notification Preferences</span>
+                    </h3>
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider leading-relaxed">
+                      Configure your preferred luxury communication channels:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 text-[11px] text-zinc-350">
+                      {[
+                        { key: "orderEmails", label: "Order Confirmation & Update Emails", desc: "Receive receipt copies and processing status transitions." },
+                        { key: "shipmentEmails", label: "Courier Tracking & Shipment Updates", desc: "Receive carrier tracking codes, waybills, and arrival times." },
+                        { key: "promotionalEmails", label: "Exclusive Seasonal Pre-orders & Invites", desc: "Receive limited couture collection releases and invites." },
+                        { key: "accountEmails", label: "Security & Account Change Alerts", desc: "Receive welcome copies, password change confirmations, etc." }
+                      ].map((item) => (
+                        <label key={item.key} className="flex items-start space-x-3 cursor-pointer group hover:text-white">
+                          <input
+                            type="checkbox"
+                            checked={(userPrefs as any)[item.key]}
+                            onChange={() => handleTogglePreference(item.key as any)}
+                            disabled={savingPrefs}
+                            className="mt-0.5 border border-zinc-700 bg-transparent rounded-none focus:ring-0 focus:ring-offset-0 text-accent cursor-pointer"
+                          />
+                          <div>
+                            <span className="font-semibold block">{item.label}</span>
+                            <span className="text-[9px] text-zinc-500 block mt-0.5">{item.desc}</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* NOTIFICATION LOGS LIST */}
+                  {loadingNotifs ? (
+                    <div className="py-20 flex justify-center">
+                      <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : notifications.filter(n => {
+                    const matchesSearch = n.title.toLowerCase().includes(notifSearch.toLowerCase()) ||
+                                         n.message.toLowerCase().includes(notifSearch.toLowerCase());
+                    const matchesFilter = notifFilter === "all" ||
+                                         (notifFilter === "unread" && !n.read) ||
+                                         (notifFilter === "read" && n.read) ||
+                                         (notifFilter === "order" && n.type.includes("order")) ||
+                                         (notifFilter === "shipment" && n.type.includes("shipment"));
+                    return matchesSearch && matchesFilter;
+                  }).length === 0 ? (
+                    <div className="border border-[#1D1D1D] bg-[#121212]/30 p-12 text-center text-zinc-500 font-light flex flex-col items-center justify-center space-y-3">
+                      <Bell className="w-6 h-6 text-zinc-650" />
+                      <span>No notifications matching your criteria found.</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {notifications.filter(n => {
+                        const matchesSearch = n.title.toLowerCase().includes(notifSearch.toLowerCase()) ||
+                                             n.message.toLowerCase().includes(notifSearch.toLowerCase());
+                        const matchesFilter = notifFilter === "all" ||
+                                             (notifFilter === "unread" && !n.read) ||
+                                             (notifFilter === "read" && n.read) ||
+                                             (notifFilter === "order" && n.type.includes("order")) ||
+                                             (notifFilter === "shipment" && n.type.includes("shipment"));
+                        return matchesSearch && matchesFilter;
+                      }).map((n) => (
+                        <div
+                          key={n.id}
+                          onClick={() => !n.read && handleMarkNotifRead(n.id)}
+                          className={`border p-4 flex items-start justify-between gap-4 transition duration-300 relative overflow-hidden ${
+                            n.read
+                              ? "bg-[#121212]/45 border-[#1A1A1A] text-zinc-400"
+                              : "bg-[#161616] border-[#222222] text-white hover:border-accent/40 cursor-pointer"
+                          }`}
+                        >
+                          {!n.read && (
+                            <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-accent" />
+                          )}
+                          <div className="flex items-start space-x-3.5">
+                            <div className={`p-2 border rounded-none ${n.read ? "border-[#1F1F1F] bg-[#141414]" : "border-accent/20 bg-accent/5 text-accent"}`}>
+                              {n.type.includes("shipment") ? (
+                                <Truck className="w-4 h-4" />
+                              ) : n.type.includes("order") ? (
+                                <Package className="w-4 h-4" />
+                              ) : (
+                                <Bell className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center space-x-2.5">
+                                <h4 className="font-semibold text-xs">{n.title}</h4>
+                                {!n.read && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                                )}
+                              </div>
+                              <p className="text-[11px] font-light text-zinc-400 leading-relaxed">{n.message}</p>
+                            </div>
+                          </div>
+
+                          <div className="text-[9px] text-zinc-550 font-mono flex-shrink-0 text-right">
+                            {new Date(n.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
