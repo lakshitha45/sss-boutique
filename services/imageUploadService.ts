@@ -51,11 +51,7 @@ export async function uploadProductImage(
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.setRequestHeader("apikey", supabaseAnonKey);
     xhr.setRequestHeader("x-upsert", "false");
-
-    // Construct FormData body
-    const formData = new FormData();
-    formData.append("cacheControl", "3600");
-    formData.append("file", file);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
 
     // Track upload progress in real-time
     xhr.upload.onprogress = (event) => {
@@ -95,6 +91,6 @@ export async function uploadProductImage(
       reader.readAsDataURL(file);
     };
 
-    xhr.send(formData);
+    xhr.send(file);
   });
 }
