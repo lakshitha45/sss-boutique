@@ -51,7 +51,7 @@ CREATE POLICY "Allow admin manage notification_logs" ON public.notification_logs
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE id = auth.uid()
-            AND (role = 'admin'::public.user_role_type OR role = 'superadmin'::public.user_role_type OR role = 'super_admin'::public.user_role_type)
+            AND (role::text = 'admin' OR role::text = 'superadmin' OR role::text = 'super_admin')
         )
     );
 
@@ -87,7 +87,7 @@ CREATE POLICY "Allow admin manage categories" ON public.categories
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE id = auth.uid()
-            AND (role = 'admin'::public.user_role_type OR role = 'superadmin'::public.user_role_type OR role = 'super_admin'::public.user_role_type)
+            AND (role::text = 'admin' OR role::text = 'superadmin' OR role::text = 'super_admin')
         )
     );
 
@@ -102,7 +102,7 @@ CREATE POLICY "Allow admin manage products" ON public.products
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE id = auth.uid()
-            AND (role = 'admin'::public.user_role_type OR role = 'superadmin'::public.user_role_type OR role = 'super_admin'::public.user_role_type)
+            AND (role::text = 'admin' OR role::text = 'superadmin' OR role::text = 'super_admin')
         )
     );
 
@@ -117,7 +117,7 @@ CREATE POLICY "Allow admin manage product_images" ON public.product_images
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE id = auth.uid()
-            AND (role = 'admin'::public.user_role_type OR role = 'superadmin'::public.user_role_type OR role = 'super_admin'::public.user_role_type)
+            AND (role::text = 'admin' OR role::text = 'superadmin' OR role::text = 'super_admin')
         )
     );
 
@@ -132,7 +132,7 @@ CREATE POLICY "Allow admin manage product_variants" ON public.product_variants
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE id = auth.uid()
-            AND (role = 'admin'::public.user_role_type OR role = 'superadmin'::public.user_role_type OR role = 'super_admin'::public.user_role_type)
+            AND (role::text = 'admin' OR role::text = 'superadmin' OR role::text = 'super_admin')
         )
     );
 
