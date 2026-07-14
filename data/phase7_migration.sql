@@ -143,6 +143,16 @@ CREATE POLICY "Allow admin manage product_variants" ON public.product_variants
 ALTER TABLE IF EXISTS public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.order_items ENABLE ROW LEVEL SECURITY;
 
+-- Alter public.orders and public.order_items tables to support notes, history, product names, images, and sizes
+ALTER TABLE IF EXISTS public.orders
+  ADD COLUMN IF NOT EXISTS order_notes TEXT,
+  ADD COLUMN IF NOT EXISTS status_history JSONB DEFAULT '[]'::jsonb;
+
+ALTER TABLE IF EXISTS public.order_items
+  ADD COLUMN IF NOT EXISTS product_name VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS product_image TEXT,
+  ADD COLUMN IF NOT EXISTS variant_size VARCHAR(50);
+
 -- Orders RLS policies
 DROP POLICY IF EXISTS "Allow users to read their own orders" ON public.orders;
 CREATE POLICY "Allow users to read their own orders" ON public.orders

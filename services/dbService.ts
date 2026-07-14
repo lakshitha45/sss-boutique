@@ -1247,27 +1247,48 @@ export const dbService = {
         }
       }
 
-      const { data: oData, error: oErr } = await supabase
+      const baseOrderPayload = {
+        order_number: orderNumber,
+        user_id: order.userId,
+        customer_name: order.customerName,
+        customer_email: order.customerEmail,
+        subtotal: order.subtotal,
+        discount: order.discount,
+        shipping: order.shipping,
+        tax: order.tax,
+        grand_total: order.grandTotal,
+        payment_status: "pending",
+        order_status: "pending",
+        shipping_address: order.shippingAddress,
+        tracking_number: order.trackingNumber,
+      };
+
+      let oData: any;
+      let oErr: any;
+
+      const firstTry = await supabase
         .from("orders")
         .insert([{
-          order_number: orderNumber,
-          user_id: order.userId,
-          customer_name: order.customerName,
-          customer_email: order.customerEmail,
-          subtotal: order.subtotal,
-          discount: order.discount,
-          shipping: order.shipping,
-          tax: order.tax,
-          grand_total: order.grandTotal,
-          payment_status: "pending",
-          order_status: "pending",
-          shipping_address: order.shippingAddress,
-          tracking_number: order.trackingNumber,
+          ...baseOrderPayload,
           order_notes: order.orderNotes || null,
           status_history: initialHistory,
         }])
         .select()
         .single();
+      
+      oData = firstTry.data;
+      oErr = firstTry.error;
+
+      if (oErr && (oErr.code === "42703" || (oErr.message && oErr.message.toLowerCase().includes("column")))) {
+        console.warn("Orders table lacks status_history/notes schema columns. Retrying insert with base columns.");
+        const retryRes = await supabase
+          .from("orders")
+          .insert([baseOrderPayload])
+          .select()
+          .single();
+        oData = retryRes.data;
+        oErr = retryRes.error;
+      }
       
       if (oErr) throw oErr;
 
@@ -1283,7 +1304,21 @@ export const dbService = {
       }));
 
       const { error: itemsErr } = await supabase.from("order_items").insert(itemsToInsert);
-      if (itemsErr) throw itemsErr;
+      
+      if (itemsErr && (itemsErr.code === "42703" || (itemsErr.message && itemsErr.message.toLowerCase().includes("column")))) {
+        console.warn("Order items table lacks product details/size columns. Retrying insert with base columns.");
+        const baseItemsToInsert = order.items.map((item) => ({
+          order_id: oData.id,
+          product_id: item.productId,
+          variant_id: item.variantId,
+          quantity: item.quantity,
+          price: item.price,
+        }));
+        const retryItemsRes = await supabase.from("order_items").insert(baseItemsToInsert);
+        if (retryItemsRes.error) throw retryItemsRes.error;
+      } else if (itemsErr) {
+        throw itemsErr;
+      }
 
       // Decrement stock & check low stock
       for (const item of order.items) {
