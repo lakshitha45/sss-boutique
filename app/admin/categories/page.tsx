@@ -168,6 +168,7 @@ export default function CategoriesPage() {
   const uploadFile = async (file: File) => {
     setIsUploading(true);
     setUploadProgress(0);
+    setError("");
     try {
       const publicUrl = await uploadProductImage(file, "categories", (percent) => {
         setUploadProgress(percent);

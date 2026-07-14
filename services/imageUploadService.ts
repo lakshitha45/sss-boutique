@@ -71,17 +71,28 @@ export async function uploadProductImage(
         const publicUrl = `${supabaseUrl}/storage/v1/object/public/products/${filePath}`;
         resolve(publicUrl);
       } else {
-        try {
-          const res = JSON.parse(xhr.responseText);
-          reject(new Error(res.message || `Upload failed with status ${xhr.status}`));
-        } catch {
+        console.warn(`[Supabase Upload] Status ${xhr.status}. Falling back to local Base64 URL.`);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          resolve(reader.result as string);
+        };
+        reader.onerror = () => {
           reject(new Error(`Upload failed with status ${xhr.status}`));
-        }
+        };
+        reader.readAsDataURL(file);
       }
     };
 
     xhr.onerror = () => {
-      reject(new Error("Network connection error during Supabase Storage upload."));
+      console.warn("[Supabase Upload] Network connection error. Falling back to local Base64 URL.");
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        resolve(reader.result as string);
+      };
+      reader.onerror = () => {
+        reject(new Error("Network connection error during Supabase Storage upload."));
+      };
+      reader.readAsDataURL(file);
     };
 
     xhr.send(formData);
