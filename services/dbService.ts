@@ -1889,31 +1889,56 @@ export const dbService = {
   ): Promise<Notification> {
     const timestamp = new Date().toISOString();
     if (isSupabaseConfigured() && supabase) {
-      const { data, error } = await supabase
-        .from("notifications")
-        .insert([{
-          type,
-          title,
-          message,
-          read: false,
-          user_id: userId || null,
-          order_id: orderId || null,
-          channel: channel || "in_app"
-        }])
-        .select()
-        .single();
-      if (error) throw error;
-      return {
-        id: data.id,
-        type: data.type,
-        title: data.title,
-        message: data.message,
-        read: data.read,
-        userId: data.user_id,
-        orderId: data.order_id,
-        channel: data.channel,
-        createdAt: data.created_at
+      const basePayload = {
+        type,
+        title,
+        message,
+        read: false,
       };
+
+      try {
+        const { data, error } = await supabase
+          .from("notifications")
+          .insert([{
+            ...basePayload,
+            user_id: userId || null,
+            order_id: orderId || null,
+            channel: channel || "in_app"
+          }])
+          .select()
+          .single();
+        if (error) throw error;
+        return {
+          id: data.id,
+          type: data.type,
+          title: data.title,
+          message: data.message,
+          read: data.read,
+          userId: data.user_id,
+          orderId: data.order_id,
+          channel: data.channel,
+          createdAt: data.created_at
+        };
+      } catch (err: any) {
+        if (err.code === "42703" || (err.message && err.message.toLowerCase().includes("column"))) {
+          console.warn("Notifications table lacks new schema columns. Retrying with base columns.");
+          const { data, error } = await supabase
+            .from("notifications")
+            .insert([basePayload])
+            .select()
+            .single();
+          if (error) throw error;
+          return {
+            id: data.id,
+            type: data.type,
+            title: data.title,
+            message: data.message,
+            read: data.read,
+            createdAt: data.created_at
+          };
+        }
+        throw err;
+      }
     } else {
       const db = initMockDb();
       const newNotif: Notification = {
