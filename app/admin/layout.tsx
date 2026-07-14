@@ -28,6 +28,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Command,
+  Truck,
 } from "lucide-react";
 import { fetchNotifications, markNotificationAsRead } from "@/features/orders/orderActions";
 
@@ -106,6 +107,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { name: "Products", href: "/admin/products", icon: ShoppingBag },
         { name: "Categories", href: "/admin/categories", icon: Tag },
         { name: "Orders", href: "/admin/orders", icon: FolderHeart },
+        { name: "Shipments", href: "/admin/shipments", icon: Truck },
       ],
     },
     {

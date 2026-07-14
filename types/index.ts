@@ -311,3 +311,41 @@ export interface BrandSettings {
   pinterest: string;
 }
 
+export type ShipmentStatus =
+  | "Shipment Pending"
+  | "Packed"
+  | "Ready For Pickup"
+  | "Picked Up"
+  | "In Transit"
+  | "Out For Delivery"
+  | "Delivered"
+  | "Delivery Failed"
+  | "Returned"
+  | "Cancelled";
+
+export interface ShipmentTimelineItem {
+  status: string;
+  timestamp: string;
+  action: string;
+  user: string;
+}
+
+export interface Shipment {
+  id: string;
+  orderId: string;
+  orderNumber?: string;
+  customerName?: string;
+  customerEmail?: string;
+  shippingAddress?: any;
+  courierName: string;
+  trackingNumber: string;
+  status: ShipmentStatus | string;
+  shippingDate?: string;
+  estimatedDeliveryDate?: string;
+  deliveredDate?: string;
+  notes?: string;
+  timeline: ShipmentTimelineItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+

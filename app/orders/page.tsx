@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/features/auth/AuthContext";
 import { fetchOrders, fetchAddresses, createAddress, updateAddress, deleteAddress, setDefaultAddress, updateProfile } from "@/features/orders/orderActions";
+import { fetchShipmentByOrderId } from "@/features/shipments/shipmentActions";
 import { Order, Product } from "@/types";
 import { formatPrice } from "@/utils";
 import Header from "@/components/Header";
@@ -22,9 +23,10 @@ export default function AccountDashboardPage() {
   // Tab State
   const [activeTab, setActiveTab] = useState<"orders" | "wishlist" | "addresses" | "profile">("orders");
 
-  // Orders State
+  // Orders & Shipments State
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [shipmentsData, setShipmentsData] = useState<Record<string, any>>({});
 
   // Wishlist State
   const [wishlistItems, setWishlistItems] = useState<Product[]>([]);
@@ -63,7 +65,7 @@ export default function AccountDashboardPage() {
     }
   }, [user, isLoading, router]);
 
-  // Load orders
+  // Load orders and shipments
   useEffect(() => {
     async function loadOrders() {
       if (!user) return;
@@ -73,6 +75,16 @@ export default function AccountDashboardPage() {
           (o) => o.customerEmail.toLowerCase() === user.email.toLowerCase()
         );
         setOrders(userOrders);
+
+        // Load shipment details for each order
+        const shps: Record<string, any> = {};
+        for (const ord of userOrders) {
+          try {
+            const shp = await fetchShipmentByOrderId(ord.id);
+            if (shp) shps[ord.id] = shp;
+          } catch { /* skip */ }
+        }
+        setShipmentsData(shps);
       } catch (err) {
         console.error("Failed to load orders", err);
       } finally {
@@ -458,16 +470,63 @@ export default function AccountDashboardPage() {
                             </div>
                           )}
 
+                          {/* Shipment Tracking Card */}
+                          {shipmentsData[order.id] && (
+                            <div className="bg-[#161616]/30 px-6 py-3 border-t border-[#1C1C1C] text-[10px] text-zinc-400">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <div>
+                                  <span className="text-[9px] text-zinc-500 uppercase tracking-widest block mb-0.5 font-bold">Courier</span>
+                                  <span className="text-white font-semibold">{shipmentsData[order.id].courierName}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-zinc-500 uppercase tracking-widest block mb-0.5 font-bold">Tracking ID</span>
+                                  <span className="text-accent font-mono font-semibold">{shipmentsData[order.id].trackingNumber}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-zinc-500 uppercase tracking-widest block mb-0.5 font-bold">Shipment Status</span>
+                                  <span className="text-white font-semibold">{shipmentsData[order.id].status}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-zinc-500 uppercase tracking-widest block mb-0.5 font-bold">Est. Delivery</span>
+                                  <span className="text-white font-semibold">
+                                    {shipmentsData[order.id].estimatedDeliveryDate
+                                      ? new Date(shipmentsData[order.id].estimatedDeliveryDate).toLocaleDateString()
+                                      : "Pending"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Fulfillment Timeline Journey */}
                           <div className="bg-[#181818] border-t border-[#1F1F1F] px-6 py-4 space-y-4">
                             <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
                               <span>Fulfillment Journey</span>
-                              {order.trackingNumber && (
-                                <span className="font-mono text-accent">Waybill: {order.trackingNumber}</span>
+                              {(shipmentsData[order.id]?.trackingNumber || order.trackingNumber) && (
+                                <span className="font-mono text-accent">Waybill: {shipmentsData[order.id]?.trackingNumber || order.trackingNumber}</span>
                               )}
                             </div>
                             <div className="relative border-l border-accent/20 pl-4 ml-2.5 space-y-4 pt-1 pb-1">
-                              {order.statusHistory && order.statusHistory.length > 0 ? (
+                              {/* Prefer shipment timeline if available, otherwise fall back to order status history */}
+                              {shipmentsData[order.id]?.timeline && shipmentsData[order.id].timeline.length > 0 ? (
+                                shipmentsData[order.id].timeline.map((historyItem: any, index: number) => (
+                                  <div key={index} className="relative text-[11px]">
+                                    <span className="absolute -left-[21px] top-0.5 w-2.5 h-2.5 bg-accent border border-black rounded-full" />
+                                    <div className="space-y-0.5">
+                                      <div className="flex items-center space-x-2">
+                                        <span className="font-semibold text-white uppercase text-[9px] tracking-wide bg-accent/10 border border-accent/25 px-1.5 py-0.5">
+                                          {historyItem.status}
+                                        </span>
+                                        <span className="text-[9px] text-zinc-500 font-mono flex items-center space-x-1">
+                                          <Clock className="w-3 h-3 text-zinc-500" />
+                                          <span>{new Date(historyItem.timestamp).toLocaleString()}</span>
+                                        </span>
+                                      </div>
+                                      <p className="text-zinc-400 font-light text-[10px]">{historyItem.action}</p>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : order.statusHistory && order.statusHistory.length > 0 ? (
                                 order.statusHistory.map((historyItem: any, index: number) => (
                                   <div key={index} className="relative text-[11px]">
                                     <span className="absolute -left-[21px] top-0.5 w-2.5 h-2.5 bg-accent border border-black rounded-full" />

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import { Product, Category, ProductImage, ProductVariant, Order, UserProfile, ActivityLog, Address, Notification } from "@/types";
+import { Product, Category, ProductImage, ProductVariant, Order, UserProfile, ActivityLog, Address, Notification, Shipment } from "@/types";
 
 const MOCK_DB_DIR = path.join(process.cwd(), "data");
 const MOCK_DB_PATH = path.join(MOCK_DB_DIR, "db.json");
@@ -142,6 +142,7 @@ interface MockSchema {
   activity_logs: ActivityLog[];
   notifications: Notification[];
   addresses: Address[];
+  shipments: Shipment[];
 }
 
 const initMockDb = (): MockSchema => {
@@ -234,6 +235,7 @@ const initMockDb = (): MockSchema => {
       ],
       notifications: [],
       addresses: [],
+      shipments: [],
     };
 
     fs.writeFileSync(MOCK_DB_PATH, JSON.stringify(initialData, null, 2), "utf8");
@@ -255,6 +257,7 @@ const initMockDb = (): MockSchema => {
       activity_logs: [],
       notifications: [],
       addresses: [],
+      shipments: [],
     };
   }
 };
@@ -1742,6 +1745,388 @@ export const dbService = {
         p.createdAt
       ]);
       return [headers.join(","), ...rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))].join("\n");
+    }
+  },
+
+  // --- SHIPMENTS FULFILLMENT MANAGEMENT ---
+  async getShipments(): Promise<Shipment[]> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("shipments")
+        .select("*, orders(*)")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data || []).map((s: any) => ({
+        id: s.id,
+        orderId: s.order_id,
+        orderNumber: s.orders?.order_number,
+        customerName: s.orders?.customer_name,
+        customerEmail: s.orders?.customer_email,
+        shippingAddress: s.orders?.shipping_address,
+        courierName: s.courier_name,
+        trackingNumber: s.tracking_number,
+        status: s.status,
+        shippingDate: s.shipping_date,
+        estimatedDeliveryDate: s.estimated_delivery_date,
+        deliveredDate: s.delivered_date,
+        notes: s.notes,
+        timeline: s.timeline || [],
+        createdAt: s.created_at,
+        updatedAt: s.updated_at
+      }));
+    } else {
+      const db = initMockDb();
+      return db.shipments.map((s) => {
+        const order = db.orders.find((o) => o.id === s.orderId);
+        return {
+          ...s,
+          orderNumber: order?.orderNumber,
+          customerName: order?.customerName,
+          customerEmail: order?.customerEmail,
+          shippingAddress: order?.shippingAddress
+        };
+      }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+  },
+
+  async getShipmentByOrderId(orderId: string): Promise<Shipment | null> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("shipments")
+        .select("*, orders(*)")
+        .eq("order_id", orderId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      return {
+        id: data.id,
+        orderId: data.order_id,
+        orderNumber: data.orders?.order_number,
+        customerName: data.orders?.customer_name,
+        customerEmail: data.orders?.customer_email,
+        shippingAddress: data.orders?.shipping_address,
+        courierName: data.courier_name,
+        trackingNumber: data.tracking_number,
+        status: data.status,
+        shippingDate: data.shipping_date,
+        estimatedDeliveryDate: data.estimated_delivery_date,
+        deliveredDate: data.delivered_date,
+        notes: data.notes,
+        timeline: data.timeline || [],
+        createdAt: data.created_at,
+        updatedAt: data.updated_at
+      };
+    } else {
+      const db = initMockDb();
+      const s = db.shipments.find((x) => x.orderId === orderId);
+      if (!s) return null;
+      const order = db.orders.find((o) => o.id === s.orderId);
+      return {
+        ...s,
+        orderNumber: order?.orderNumber,
+        customerName: order?.customerName,
+        customerEmail: order?.customerEmail,
+        shippingAddress: order?.shippingAddress
+      };
+    }
+  },
+
+  async createShipment(shipment: Omit<Shipment, "id" | "createdAt" | "updatedAt" | "timeline">): Promise<Shipment> {
+    const timestamp = new Date().toISOString();
+    const initialTimeline = [{
+      status: shipment.status,
+      timestamp,
+      action: `Shipment created via ${shipment.courierName} with tracking code ${shipment.trackingNumber}`,
+      user: "admin"
+    }];
+
+    // Determine corresponding Order status mapping
+    let orderStatusValue = "shipped";
+    if (shipment.status === "Delivered") orderStatusValue = "delivered";
+    else if (shipment.status === "Cancelled" || shipment.status === "Returned") orderStatusValue = "cancelled";
+    else if (shipment.status === "Packed") orderStatusValue = "packed";
+
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("shipments")
+        .insert([{
+          order_id: shipment.orderId,
+          courier_name: shipment.courierName,
+          tracking_number: shipment.trackingNumber,
+          status: shipment.status,
+          shipping_date: shipment.shippingDate || timestamp,
+          estimated_delivery_date: shipment.estimatedDeliveryDate || null,
+          delivered_date: shipment.deliveredDate || null,
+          notes: shipment.notes || null,
+          timeline: initialTimeline
+        }])
+        .select()
+        .single();
+      if (error) throw error;
+
+      // Update Order tracking and status history
+      const { data: ord } = await supabase.from("orders").select("status_history").eq("id", shipment.orderId).single();
+      const updatedHistory = [...(ord?.status_history || []), {
+        status: orderStatusValue === "shipped" ? "Shipped" : (orderStatusValue === "delivered" ? "Delivered" : "Cancelled"),
+        timestamp,
+        user: "admin",
+        action: `Shipment created. Carrier: ${shipment.courierName}, Tracking: ${shipment.trackingNumber}`
+      }];
+
+      await supabase
+        .from("orders")
+        .update({
+          tracking_number: shipment.trackingNumber,
+          order_status: orderStatusValue,
+          status_history: updatedHistory
+        })
+        .eq("id", shipment.orderId);
+
+      await this.createNotification(
+        "new_order", // type placeholder matching Notification schema
+        "Shipment Dispatched",
+        `Order shipment created. Carrier: ${shipment.courierName}, Waybill: ${shipment.trackingNumber}`
+      );
+
+      await this.logActivity("admin", "Fulfillment shipment created", `Order ID: ${shipment.orderId}`, "127.0.0.1");
+
+      return {
+        id: data.id,
+        orderId: data.order_id,
+        courierName: data.courier_name,
+        trackingNumber: data.tracking_number,
+        status: data.status,
+        shippingDate: data.shipping_date,
+        estimatedDeliveryDate: data.estimated_delivery_date,
+        deliveredDate: data.delivered_date,
+        notes: data.notes,
+        timeline: initialTimeline,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at
+      };
+    } else {
+      const db = initMockDb();
+      const newShipmentId = `shp_${Date.now()}`;
+      const newShipment: Shipment = {
+        ...shipment,
+        id: newShipmentId,
+        timeline: initialTimeline,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      };
+
+      db.shipments.push(newShipment);
+
+      // Update mock order status
+      const ordIdx = db.orders.findIndex((o) => o.id === shipment.orderId);
+      if (ordIdx !== -1) {
+        db.orders[ordIdx].trackingNumber = shipment.trackingNumber;
+        db.orders[ordIdx].orderStatus = orderStatusValue === "shipped" ? "Shipped" : (orderStatusValue === "delivered" ? "Delivered" : "Cancelled");
+        db.orders[ordIdx].statusHistory = [...(db.orders[ordIdx].statusHistory || []), {
+          status: db.orders[ordIdx].orderStatus,
+          timestamp,
+          user: "admin",
+          action: `Shipment created. Carrier: ${shipment.courierName}, Tracking: ${shipment.trackingNumber}`
+        }];
+      }
+
+      db.notifications.push({
+        id: `notif_${Date.now()}`,
+        type: "inventory_updated",
+        title: "Shipment Dispatched",
+        message: `Order shipment created. Carrier: ${shipment.courierName}, Waybill: ${shipment.trackingNumber}`,
+        read: false,
+        createdAt: timestamp
+      });
+
+      db.activity_logs.push({
+        id: `log_${Date.now()}`,
+        userId: "admin",
+        action: "Fulfillment shipment created",
+        details: `Order ID: ${shipment.orderId}`,
+        ip: "127.0.0.1",
+        createdAt: timestamp
+      });
+
+      writeMockDb(db);
+      return newShipment;
+    }
+  },
+
+  async updateShipment(id: string, updates: Partial<Shipment>): Promise<Shipment> {
+    const timestamp = new Date().toISOString();
+
+    if (isSupabaseConfigured() && supabase) {
+      const { data: current, error: fetchErr } = await supabase
+        .from("shipments")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (fetchErr) throw fetchErr;
+
+      const timeline = current.timeline || [];
+      const newTimelineItem = {
+        status: updates.status || current.status,
+        timestamp,
+        action: `Shipment details updated. Status: ${updates.status || current.status}. Notes: ${updates.notes || "None"}`,
+        user: "admin"
+      };
+      const updatedTimeline = [...timeline, newTimelineItem];
+
+      const payload: any = {
+        ...updates,
+        timeline: updatedTimeline,
+        updated_at: timestamp
+      };
+      
+      // Map naming fields from TS camelCase to DB snake_case
+      if (updates.courierName) payload.courier_name = updates.courierName;
+      if (updates.trackingNumber) payload.tracking_number = updates.trackingNumber;
+      if (updates.shippingDate) payload.shipping_date = updates.shippingDate;
+      if (updates.estimatedDeliveryDate) payload.estimated_delivery_date = updates.estimatedDeliveryDate;
+      if (updates.deliveredDate) payload.delivered_date = updates.deliveredDate;
+
+      // Delete mapped fields to prevent schema collision
+      delete payload.courierName;
+      delete payload.trackingNumber;
+      delete payload.shippingDate;
+      delete payload.estimatedDeliveryDate;
+      delete payload.deliveredDate;
+      delete payload.orderId;
+      delete payload.id;
+
+      const { data, error } = await supabase
+        .from("shipments")
+        .update(payload)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+
+      // Sync Order Status
+      if (updates.status) {
+        let orderStatusValue = "shipped";
+        if (updates.status === "Delivered") orderStatusValue = "delivered";
+        else if (updates.status === "Cancelled" || updates.status === "Returned") orderStatusValue = "cancelled";
+        else if (updates.status === "Packed") orderStatusValue = "packed";
+
+        const { data: ord } = await supabase.from("orders").select("status_history").eq("id", current.order_id).single();
+        const updatedHistory = [...(ord?.status_history || []), {
+          status: orderStatusValue === "shipped" ? "Shipped" : (orderStatusValue === "delivered" ? "Delivered" : "Cancelled"),
+          timestamp,
+          user: "admin",
+          action: `Shipment status transition to ${updates.status}`
+        }];
+
+        await supabase
+          .from("orders")
+          .update({
+            order_status: orderStatusValue,
+            status_history: updatedHistory
+          })
+          .eq("id", current.order_id);
+      }
+
+      await this.createNotification(
+        "inventory_updated",
+        "Shipment Updated",
+        `Tracking status updated for package: ${updates.status || current.status}`
+      );
+
+      await this.logActivity("admin", "Shipment updated", `Shipment ID: ${id}`, "127.0.0.1");
+
+      return {
+        id: data.id,
+        orderId: data.order_id,
+        courierName: data.courier_name,
+        trackingNumber: data.tracking_number,
+        status: data.status,
+        shippingDate: data.shipping_date,
+        estimatedDeliveryDate: data.estimated_delivery_date,
+        deliveredDate: data.delivered_date,
+        notes: data.notes,
+        timeline: updatedTimeline,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at
+      };
+    } else {
+      const db = initMockDb();
+      const idx = db.shipments.findIndex((x) => x.id === id);
+      if (idx === -1) throw new Error("Shipment not found");
+
+      const current = db.shipments[idx];
+      const newTimelineItem = {
+        status: updates.status || current.status,
+        timestamp,
+        action: `Shipment details updated. Status: ${updates.status || current.status}. Notes: ${updates.notes || "None"}`,
+        user: "admin"
+      };
+
+      const updatedTimeline = [...(current.timeline || []), newTimelineItem];
+
+      db.shipments[idx] = {
+        ...current,
+        ...updates,
+        timeline: updatedTimeline,
+        updatedAt: timestamp
+      };
+
+      // Sync Order Status
+      if (updates.status) {
+        let orderStatusValue = "shipped";
+        if (updates.status === "Delivered") orderStatusValue = "delivered";
+        else if (updates.status === "Cancelled" || updates.status === "Returned") orderStatusValue = "cancelled";
+        else if (updates.status === "Packed") orderStatusValue = "packed";
+
+        const ordIdx = db.orders.findIndex((o) => o.id === current.orderId);
+        if (ordIdx !== -1) {
+          db.orders[ordIdx].orderStatus = orderStatusValue === "shipped" ? "Shipped" : (orderStatusValue === "delivered" ? "Delivered" : "Cancelled");
+          db.orders[ordIdx].statusHistory = [...(db.orders[ordIdx].statusHistory || []), {
+            status: db.orders[ordIdx].orderStatus,
+            timestamp,
+            user: "admin",
+            action: `Shipment status transition to ${updates.status}`
+          }];
+        }
+      }
+
+      db.notifications.push({
+        id: `notif_${Date.now()}`,
+        type: "inventory_updated",
+        title: "Shipment Updated",
+        message: `Tracking status updated for package: ${updates.status || current.status}`,
+        read: false,
+        createdAt: timestamp
+      });
+
+      db.activity_logs.push({
+        id: `log_${Date.now()}`,
+        userId: "admin",
+        action: "Shipment updated",
+        details: `Shipment ID: ${id}`,
+        ip: "127.0.0.1",
+        createdAt: timestamp
+      });
+
+      writeMockDb(db);
+      return db.shipments[idx];
+    }
+  },
+
+  async deleteShipment(id: string): Promise<boolean> {
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase
+        .from("shipments")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+      return true;
+    } else {
+      const db = initMockDb();
+      const initialLength = db.shipments.length;
+      db.shipments = db.shipments.filter((x) => x.id !== id);
+      writeMockDb(db);
+      return db.shipments.length < initialLength;
     }
   }
 };
