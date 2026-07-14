@@ -722,94 +722,172 @@ export const dbService = {
     const cumulativeStock = product.variants.reduce((sum, v) => sum + v.stock, 0);
 
     if (isSupabaseConfigured() && supabase) {
-      const { data: pData, error: pErr } = await supabase
-        .from("products")
-        .insert([{
-          category_id: product.categoryId,
-          product_name: product.productName,
-          slug: product.slug,
-          description: product.description,
-          short_description: product.shortDescription,
-          price: product.price,
-          discount_price: product.discountPrice,
-          stock: cumulativeStock,
-          sku: product.sku,
-          material: product.material,
-          brand: product.brand,
-          care_instructions: product.careInstructions,
-          featured: product.featured,
-          active: product.active,
-          meta_title: product.metaTitle || null,
-          meta_description: product.metaDescription || null,
-        }])
-        .select()
-        .single();
-      
-      if (pErr) throw pErr;
+      const basePayload = {
+        category_id: product.categoryId,
+        product_name: product.productName,
+        slug: product.slug,
+        description: product.description,
+        short_description: product.shortDescription,
+        price: product.price,
+        discount_price: product.discountPrice,
+        stock: cumulativeStock,
+        sku: product.sku,
+        material: product.material,
+        brand: product.brand,
+        care_instructions: product.careInstructions,
+        featured: product.featured,
+        active: product.active,
+      };
 
-      const imagesToInsert = product.images.map((img) => ({
-        product_id: pData.id,
-        image_url: img.imageUrl,
-        display_order: img.displayOrder,
-        is_primary: img.isPrimary,
-        alt_text: img.altText || product.productName,
-      }));
+      try {
+        const { data: pData, error: pErr } = await supabase
+          .from("products")
+          .insert([{
+            ...basePayload,
+            meta_title: product.metaTitle || null,
+            meta_description: product.metaDescription || null,
+          }])
+          .select()
+          .single();
+        if (pErr) throw pErr;
 
-      const { data: imgsData, error: imgsErr } = await supabase
-        .from("product_images")
-        .insert(imagesToInsert)
-        .select();
-      if (imgsErr) throw imgsErr;
+        const imagesToInsert = product.images.map((img) => ({
+          product_id: pData.id,
+          image_url: img.imageUrl,
+          display_order: img.displayOrder,
+          is_primary: img.isPrimary,
+          alt_text: img.altText || product.productName,
+        }));
 
-      const variantsToInsert = product.variants.map((v) => ({
-        product_id: pData.id,
-        size: v.size,
-        stock: v.stock,
-        sku: v.sku || `${product.sku}-${v.size.toUpperCase()}`,
-      }));
+        const { data: imgsData, error: imgsErr } = await supabase
+          .from("product_images")
+          .insert(imagesToInsert)
+          .select();
+        if (imgsErr) throw imgsErr;
 
-      const { data: varsData, error: varsErr } = await supabase
-        .from("product_variants")
-        .insert(variantsToInsert)
-        .select();
-      if (varsErr) throw varsErr;
-
-      await this.logActivity("admin_1", "Added Product", `SKU: ${product.sku} Name: ${product.productName}`);
-
-      return {
-        ...pData,
-        categoryId: pData.category_id,
-        productName: pData.product_name,
-        name: pData.product_name, // alias
-        discountPrice: pData.discount_price,
-        compareAtPrice: pData.discount_price, // alias
-        inventory: pData.stock, // alias
-        careInstructions: pData.care_instructions,
-        metaTitle: pData.meta_title || undefined,
-        metaDescription: pData.meta_description || undefined,
-        metadata: {
-          material: pData.material,
-          care: pData.care_instructions,
-          sizes: varsData.map((v: any) => v.size),
-          colors: [],
-        },
-        care: pData.care_instructions, // alias
-        images: imgsData.map((img: any) => ({
-          id: img.id,
-          productId: img.product_id,
-          imageUrl: img.image_url,
-          displayOrder: img.display_order,
-          isPrimary: img.is_primary,
-          altText: img.alt_text,
-        })),
-        variants: varsData.map((v: any) => ({
-          id: v.id,
-          productId: v.product_id,
+        const variantsToInsert = product.variants.map((v) => ({
+          product_id: pData.id,
           size: v.size,
           stock: v.stock,
-          sku: v.sku,
-        })),
-      };
+          sku: v.sku || `${product.sku}-${v.size.toUpperCase()}`,
+        }));
+
+        const { data: varsData, error: varsErr } = await supabase
+          .from("product_variants")
+          .insert(variantsToInsert)
+          .select();
+        if (varsErr) throw varsErr;
+
+        await this.logActivity("admin_1", "Added Product", `SKU: ${product.sku} Name: ${product.productName}`);
+
+        return {
+          ...pData,
+          categoryId: pData.category_id,
+          productName: pData.product_name,
+          name: pData.product_name, // alias
+          discountPrice: pData.discount_price,
+          compareAtPrice: pData.discount_price, // alias
+          inventory: pData.stock, // alias
+          careInstructions: pData.care_instructions,
+          metaTitle: pData.meta_title || undefined,
+          metaDescription: pData.meta_description || undefined,
+          metadata: {
+            material: pData.material,
+            care: pData.care_instructions,
+            sizes: varsData.map((v: any) => v.size),
+            colors: [],
+          },
+          care: pData.care_instructions, // alias
+          images: imgsData.map((img: any) => ({
+            id: img.id,
+            productId: img.product_id,
+            imageUrl: img.image_url,
+            displayOrder: img.display_order,
+            isPrimary: img.is_primary,
+            altText: img.alt_text,
+          })),
+          variants: varsData.map((v: any) => ({
+            id: v.id,
+            productId: v.product_id,
+            size: v.size,
+            stock: v.stock,
+            sku: v.sku,
+          })),
+        };
+      } catch (err: any) {
+        if (err.code === "42703" || (err.message && err.message.toLowerCase().includes("column"))) {
+          console.warn("Products table lacks SEO schema columns. Retrying insert with base columns.");
+          const { data: pData, error: pErr } = await supabase
+            .from("products")
+            .insert([basePayload])
+            .select()
+            .single();
+          if (pErr) throw pErr;
+
+          const imagesToInsert = product.images.map((img) => ({
+            product_id: pData.id,
+            image_url: img.imageUrl,
+            display_order: img.displayOrder,
+            is_primary: img.isPrimary,
+            alt_text: img.altText || product.productName,
+          }));
+
+          const { data: imgsData, error: imgsErr } = await supabase
+            .from("product_images")
+            .insert(imagesToInsert)
+            .select();
+          if (imgsErr) throw imgsErr;
+
+          const variantsToInsert = product.variants.map((v) => ({
+            product_id: pData.id,
+            size: v.size,
+            stock: v.stock,
+            sku: v.sku || `${product.sku}-${v.size.toUpperCase()}`,
+          }));
+
+          const { data: varsData, error: varsErr } = await supabase
+            .from("product_variants")
+            .insert(variantsToInsert)
+            .select();
+          if (varsErr) throw varsErr;
+
+          await this.logActivity("admin_1", "Added Product", `SKU: ${product.sku} Name: ${product.productName}`);
+
+          return {
+            ...pData,
+            categoryId: pData.category_id,
+            productName: pData.product_name,
+            name: pData.product_name, // alias
+            discountPrice: pData.discount_price,
+            compareAtPrice: pData.discount_price, // alias
+            inventory: pData.stock, // alias
+            careInstructions: pData.care_instructions,
+            metadata: {
+              material: pData.material,
+              care: pData.care_instructions,
+              sizes: varsData.map((v: any) => v.size),
+              colors: [],
+            },
+            care: pData.care_instructions, // alias
+            images: imgsData.map((img: any) => ({
+              id: img.id,
+              productId: img.product_id,
+              imageUrl: img.image_url,
+              displayOrder: img.display_order,
+              isPrimary: img.is_primary,
+              altText: img.alt_text,
+            })),
+            variants: varsData.map((v: any) => ({
+              id: v.id,
+              productId: v.product_id,
+              size: v.size,
+              stock: v.stock,
+              sku: v.sku,
+            })),
+          };
+        }
+        throw err;
+      }
     } else {
       const db = initMockDb();
       const newProdId = `prod_${Date.now()}`;
@@ -905,43 +983,91 @@ export const dbService = {
         mapped.stock = updates.variants.reduce((sum, v) => sum + v.stock, 0);
       }
 
-      const { data: pData, error: pErr } = await supabase
-        .from("products")
-        .update(mapped)
-        .eq("id", id)
-        .select()
-        .single();
-      if (pErr) throw pErr;
+      try {
+        const { data: pData, error: pErr } = await supabase
+          .from("products")
+          .update(mapped)
+          .eq("id", id)
+          .select()
+          .single();
+        if (pErr) throw pErr;
 
-      if (updates.images) {
-        await supabase.from("product_images").delete().eq("product_id", id);
-        const imagesToInsert = updates.images.map((img) => ({
-          product_id: id,
-          image_url: img.imageUrl,
-          display_order: img.displayOrder,
-          is_primary: img.isPrimary,
-          alt_text: img.altText || pData.product_name,
-        }));
-        await supabase.from("product_images").insert(imagesToInsert);
+        if (updates.images) {
+          await supabase.from("product_images").delete().eq("product_id", id);
+          const imagesToInsert = updates.images.map((img) => ({
+            product_id: id,
+            image_url: img.imageUrl,
+            display_order: img.displayOrder,
+            is_primary: img.isPrimary,
+            alt_text: img.altText || pData.product_name,
+          }));
+          await supabase.from("product_images").insert(imagesToInsert);
+        }
+
+        if (updates.variants) {
+          await supabase.from("product_variants").delete().eq("product_id", id);
+          const skuRoot = updates.sku || pData.sku;
+          const variantsToInsert = updates.variants.map((v) => ({
+            product_id: id,
+            size: v.size,
+            stock: v.stock,
+            sku: v.sku || `${skuRoot}-${v.size.toUpperCase()}`,
+          }));
+          await supabase.from("product_variants").insert(variantsToInsert);
+        }
+
+        const updatedProd = await this.getProductBySlug(pData.slug);
+        if (!updatedProd) throw new Error("Update synchronization failed");
+
+        await this.logActivity("admin_1", "Edited Product", `SKU: ${updatedProd.sku} Name: ${updatedProd.productName}`);
+        return updatedProd;
+      } catch (err: any) {
+        if (err.code === "42703" || (err.message && err.message.toLowerCase().includes("column"))) {
+          console.warn("Products table lacks SEO schema columns. Retrying update with base columns only.");
+          const baseMapped = { ...mapped };
+          delete baseMapped.meta_title;
+          delete baseMapped.meta_description;
+
+          const { data: pData, error: pErr } = await supabase
+            .from("products")
+            .update(baseMapped)
+            .eq("id", id)
+            .select()
+            .single();
+          if (pErr) throw pErr;
+
+          if (updates.images) {
+            await supabase.from("product_images").delete().eq("product_id", id);
+            const imagesToInsert = updates.images.map((img) => ({
+              product_id: id,
+              image_url: img.imageUrl,
+              display_order: img.displayOrder,
+              is_primary: img.isPrimary,
+              alt_text: img.altText || pData.product_name,
+            }));
+            await supabase.from("product_images").insert(imagesToInsert);
+          }
+
+          if (updates.variants) {
+            await supabase.from("product_variants").delete().eq("product_id", id);
+            const skuRoot = updates.sku || pData.sku;
+            const variantsToInsert = updates.variants.map((v) => ({
+              product_id: id,
+              size: v.size,
+              stock: v.stock,
+              sku: v.sku || `${skuRoot}-${v.size.toUpperCase()}`,
+            }));
+            await supabase.from("product_variants").insert(variantsToInsert);
+          }
+
+          const updatedProd = await this.getProductBySlug(pData.slug);
+          if (!updatedProd) throw new Error("Update synchronization failed");
+
+          await this.logActivity("admin_1", "Edited Product", `SKU: ${updatedProd.sku} Name: ${updatedProd.productName}`);
+          return updatedProd;
+        }
+        throw err;
       }
-
-      if (updates.variants) {
-        await supabase.from("product_variants").delete().eq("product_id", id);
-        const skuRoot = updates.sku || pData.sku;
-        const variantsToInsert = updates.variants.map((v) => ({
-          product_id: id,
-          size: v.size,
-          stock: v.stock,
-          sku: v.sku || `${skuRoot}-${v.size.toUpperCase()}`,
-        }));
-        await supabase.from("product_variants").insert(variantsToInsert);
-      }
-
-      const updatedProd = await this.getProductBySlug(pData.slug);
-      if (!updatedProd) throw new Error("Update synchronization failed");
-
-      await this.logActivity("admin_1", "Edited Product", `SKU: ${updatedProd.sku} Name: ${updatedProd.productName}`);
-      return updatedProd;
     } else {
       const db = initMockDb();
       const idx = db.products.findIndex((p) => p.id === id);

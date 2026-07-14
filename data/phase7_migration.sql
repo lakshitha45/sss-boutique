@@ -63,10 +63,14 @@ CREATE POLICY "Allow users manage own preferences" ON public.notification_prefer
 CREATE POLICY "Allow users view own notifications" ON public.notifications
     FOR SELECT USING (user_id = auth.uid() OR user_id IS NULL);
 
--- 8. Alter categories table to support active, display_order and SEO metadata fields
+-- 8. Alter categories and products tables to support active, display_order and SEO metadata fields
 ALTER TABLE IF EXISTS public.categories
   ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE,
   ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS meta_title VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS meta_description TEXT;
+
+ALTER TABLE IF EXISTS public.products
   ADD COLUMN IF NOT EXISTS meta_title VARCHAR(255),
   ADD COLUMN IF NOT EXISTS meta_description TEXT;
 
