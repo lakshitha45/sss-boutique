@@ -365,37 +365,67 @@ export const dbService = {
 
   async createCategory(category: Omit<Category, "id" | "createdAt" | "updatedAt" | "imageUrl">): Promise<Category> {
     if (isSupabaseConfigured() && supabase) {
-      const { data, error } = await supabase
-        .from("categories")
-        .insert([{
-          name: category.name,
-          slug: category.slug,
-          description: category.description,
-          banner_image: category.bannerImage,
-          is_featured: category.isFeatured,
-          active: category.active !== undefined ? category.active : true,
-          display_order: category.displayOrder !== undefined ? category.displayOrder : 0,
-          meta_title: category.metaTitle || null,
-          meta_description: category.metaDescription || null,
-        }])
-        .select()
-        .single();
-      if (error) throw error;
-      return {
-        id: data.id,
-        name: data.name,
-        slug: data.slug,
-        description: data.description,
-        bannerImage: data.banner_image,
-        imageUrl: data.banner_image, // alias
-        isFeatured: data.is_featured,
-        active: data.active,
-        displayOrder: data.display_order,
-        metaTitle: data.meta_title || undefined,
-        metaDescription: data.meta_description || undefined,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
+      const basePayload = {
+        name: category.name,
+        slug: category.slug,
+        description: category.description,
+        banner_image: category.bannerImage,
+        is_featured: category.isFeatured,
       };
+
+      try {
+        const { data, error } = await supabase
+          .from("categories")
+          .insert([{
+            ...basePayload,
+            active: category.active !== undefined ? category.active : true,
+            display_order: category.displayOrder !== undefined ? category.displayOrder : 0,
+            meta_title: category.metaTitle || null,
+            meta_description: category.metaDescription || null,
+          }])
+          .select()
+          .single();
+        if (error) throw error;
+        return {
+          id: data.id,
+          name: data.name,
+          slug: data.slug,
+          description: data.description,
+          bannerImage: data.banner_image,
+          imageUrl: data.banner_image, // alias
+          isFeatured: data.is_featured,
+          active: data.active,
+          displayOrder: data.display_order,
+          metaTitle: data.meta_title || undefined,
+          metaDescription: data.meta_description || undefined,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at,
+        };
+      } catch (err: any) {
+        if (err.code === "42703" || (err.message && err.message.toLowerCase().includes("column"))) {
+          console.warn("Categories table lacks new schema columns. Retrying with base columns.");
+          const { data, error } = await supabase
+            .from("categories")
+            .insert([basePayload])
+            .select()
+            .single();
+          if (error) throw error;
+          return {
+            id: data.id,
+            name: data.name,
+            slug: data.slug,
+            description: data.description,
+            bannerImage: data.banner_image,
+            imageUrl: data.banner_image, // alias
+            isFeatured: data.is_featured,
+            active: true,
+            displayOrder: 0,
+            createdAt: data.created_at,
+            updatedAt: data.updated_at,
+          };
+        }
+        throw err;
+      }
     } else {
       const db = initMockDb();
       const newCategory: Category = {
@@ -428,28 +458,62 @@ export const dbService = {
       if (updates.metaTitle !== undefined) mapped.meta_title = updates.metaTitle;
       if (updates.metaDescription !== undefined) mapped.meta_description = updates.metaDescription;
 
-      const { data, error } = await supabase
-        .from("categories")
-        .update(mapped)
-        .eq("id", id)
-        .select()
-        .single();
-      if (error) throw error;
+      try {
+        const { data, error } = await supabase
+          .from("categories")
+          .update(mapped)
+          .eq("id", id)
+          .select()
+          .single();
+        if (error) throw error;
 
-      return {
-        id: data.id,
-        name: data.name,
-        slug: data.slug,
-        description: data.description,
-        bannerImage: data.banner_image,
-        imageUrl: data.banner_image, // alias
-        isFeatured: data.is_featured,
-        active: data.active,
-        metaTitle: data.meta_title || undefined,
-        metaDescription: data.meta_description || undefined,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-      };
+        return {
+          id: data.id,
+          name: data.name,
+          slug: data.slug,
+          description: data.description,
+          bannerImage: data.banner_image,
+          imageUrl: data.banner_image, // alias
+          isFeatured: data.is_featured,
+          active: data.active,
+          metaTitle: data.meta_title || undefined,
+          metaDescription: data.meta_description || undefined,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at,
+        };
+      } catch (err: any) {
+        if (err.code === "42703" || (err.message && err.message.toLowerCase().includes("column"))) {
+          console.warn("Categories table lacks new schema columns. Retrying update with base columns only.");
+          const baseMapped: any = {};
+          if (updates.name !== undefined) baseMapped.name = updates.name;
+          if (updates.slug !== undefined) baseMapped.slug = updates.slug;
+          if (updates.description !== undefined) baseMapped.description = updates.description;
+          if (updates.bannerImage !== undefined) baseMapped.banner_image = updates.bannerImage;
+          if (updates.isFeatured !== undefined) baseMapped.is_featured = updates.isFeatured;
+
+          const { data, error } = await supabase
+            .from("categories")
+            .update(baseMapped)
+            .eq("id", id)
+            .select()
+            .single();
+          if (error) throw error;
+
+          return {
+            id: data.id,
+            name: data.name,
+            slug: data.slug,
+            description: data.description,
+            bannerImage: data.banner_image,
+            imageUrl: data.banner_image, // alias
+            isFeatured: data.is_featured,
+            active: true,
+            createdAt: data.created_at,
+            updatedAt: data.updated_at,
+          };
+        }
+        throw err;
+      }
     } else {
       const db = initMockDb();
       const idx = db.categories.findIndex((c) => c.id === id);
