@@ -139,5 +139,44 @@ CREATE POLICY "Allow admin manage product_variants" ON public.product_variants
             AND (role::text = 'admin' OR role::text = 'superadmin' OR role::text = 'super_admin')
         )
     );
+-- 10. Row Level Security policies for orders and order_items
+ALTER TABLE IF EXISTS public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.order_items ENABLE ROW LEVEL SECURITY;
 
+-- Orders RLS policies
+DROP POLICY IF EXISTS "Allow users to read their own orders" ON public.orders;
+CREATE POLICY "Allow users to read their own orders" ON public.orders
+    FOR SELECT USING (auth.uid() = user_id OR user_id IS NULL);
 
+DROP POLICY IF EXISTS "Allow anyone to insert orders" ON public.orders;
+CREATE POLICY "Allow anyone to insert orders" ON public.orders
+    FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow admin manage orders" ON public.orders;
+CREATE POLICY "Allow admin manage orders" ON public.orders
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid()
+            AND (role::text = 'admin' OR role::text = 'superadmin' OR role::text = 'super_admin')
+        )
+    );
+
+-- Order Items RLS policies
+DROP POLICY IF EXISTS "Allow public read order_items" ON public.order_items;
+CREATE POLICY "Allow public read order_items" ON public.order_items
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow anyone to insert order_items" ON public.order_items;
+CREATE POLICY "Allow anyone to insert order_items" ON public.order_items
+    FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow admin manage order_items" ON public.order_items;
+CREATE POLICY "Allow admin manage order_items" ON public.order_items
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid()
+            AND (role::text = 'admin' OR role::text = 'superadmin' OR role::text = 'super_admin')
+        )
+    );
