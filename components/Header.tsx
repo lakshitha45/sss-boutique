@@ -149,34 +149,52 @@ export const Header: React.FC = () => {
                   </button>
                   
                   {/* Dropdown Menu */}
-                  <div className="absolute right-0 top-full w-48 bg-card border border-zinc-150 rounded-none shadow-xl py-2 hidden group-hover:block hover:block font-poppins text-xs transition duration-200">
-                    <div className="px-4 py-2 border-b border-zinc-50 text-[10px] text-zinc-400 truncate">
-                      {user.email}
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-[#121212] border border-[#1F1F1F] shadow-[0_10px_30px_rgba(0,0,0,0.5)] p-4 hidden group-hover:block hover:block font-poppins text-xs z-50">
+                    {/* User profile info banner */}
+                    <div className="flex items-center space-x-3 pb-3 border-b border-[#1A1A1A] mb-3">
+                      <div className="w-9 h-9 rounded-full bg-[#1A1A1A] border border-accent/30 flex items-center justify-center text-accent text-xs font-serif font-bold uppercase flex-shrink-0">
+                        {user.fullName.substring(0, 2)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-zinc-100 font-serif font-medium truncate">{user.fullName}</p>
+                        <p className="text-[10px] text-zinc-500 truncate">{user.email}</p>
+                      </div>
                     </div>
-                    {isAdmin && (
-                      <Link href="/admin" className="block px-4 py-2.5 hover:bg-zinc-50 hover:text-primary transition">
-                        Admin Dashboard
+
+                    {/* Navigation Buttons */}
+                    <div className="space-y-2">
+                      {isAdmin && (
+                        <Link 
+                          href="/admin" 
+                          className="flex items-center justify-center w-full py-2.5 border border-accent/40 bg-transparent text-accent text-[10px] tracking-widest uppercase font-bold hover:bg-accent hover:text-zinc-950 transition duration-300"
+                        >
+                          Admin Dashboard
+                        </Link>
+                      )}
+
+                      <Link 
+                        href="/orders" 
+                        className="flex items-center justify-center w-full py-2.5 bg-foreground text-background text-[10px] tracking-widest uppercase font-bold hover:bg-primary hover:text-white transition duration-300"
+                      >
+                        My Account
                       </Link>
-                    )}
-                    <Link href="/orders" className="block px-4 py-2.5 hover:bg-zinc-50 hover:text-primary transition">
-                      Order History
-                    </Link>
-                    <button
-                      onClick={() => logout()}
-                      className="w-full text-left block px-4 py-2.5 hover:bg-zinc-50 text-error/90 hover:text-error transition"
-                    >
-                      Logout
-                    </button>
+
+                      <button
+                        onClick={() => logout()}
+                        className="w-full py-2.5 border border-[#1A1A1A] text-zinc-400 text-[10px] tracking-widest uppercase font-bold hover:border-red-500/40 hover:text-red-400 transition duration-300"
+                      >
+                        Logout
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
                 <Link
                   href={`/login?redirect=${encodeURIComponent(pathname)}`}
-                  className="flex items-center space-x-1 text-foreground/80 hover:text-primary transition"
+                  className="inline-block font-poppins text-[10px] tracking-[0.2em] uppercase text-zinc-100 bg-[#121212] border border-[#1F1F1F] px-4 py-2 hover:bg-zinc-100 hover:text-zinc-950 hover:border-zinc-100 transition duration-300 font-semibold"
                   aria-label="Login"
                 >
-                  <User className="w-5 h-5 text-zinc-400" />
-                  <span className="hidden sm:inline font-poppins text-xs tracking-wider">Sign In</span>
+                  Sign In
                 </Link>
               )}
 
@@ -270,7 +288,7 @@ export const Header: React.FC = () => {
                     onClick={() => setMobileMenuOpen(false)}
                     className="block py-2 text-foreground/80 hover:text-primary transition"
                   >
-                    My Orders
+                    My Account
                   </Link>
                   <button
                     onClick={() => {

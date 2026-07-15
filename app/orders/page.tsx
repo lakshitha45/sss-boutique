@@ -47,6 +47,7 @@ export default function AccountDashboardPage() {
   // Wishlist State
   const [wishlistItems, setWishlistItems] = useState<Product[]>([]);
   const [loadingWishlist, setLoadingWishlist] = useState(false);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
 
   // Profile Edit State
   const [profileName, setProfileName] = useState("");
@@ -159,6 +160,19 @@ export default function AccountDashboardPage() {
       loadWishlistItems();
     }
   }, [activeTab]);
+
+  // Load all products for slug lookup
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        const prods = await fetchProducts(true);
+        setAllProducts(prods);
+      } catch (err) {
+        console.error("Failed to load products list for slug lookup", err);
+      }
+    }
+    loadProducts();
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -523,22 +537,38 @@ export default function AccountDashboardPage() {
 
                           {/* Items listing */}
                           <div className="px-6 py-4 divide-y divide-[#1F1F1F]">
-                            {order.items.map((item, idx) => (
-                              <div key={idx} className="flex items-center justify-between py-4 first:pt-2 last:pb-2 text-xs">
-                                <div className="flex items-center space-x-4">
-                                  <div className="w-12 h-16 bg-zinc-900 overflow-hidden border border-[#222] flex-shrink-0">
-                                    <img src={item.productImage} alt="" className="object-cover w-full h-full" />
+                            {order.items.map((item, idx) => {
+                              const productSlug = allProducts.find((p) => p.id === item.productId)?.slug || allProducts.find((p) => p.name.toLowerCase() === item.productName.toLowerCase())?.slug;
+
+                              return (
+                                <div key={idx} className="flex items-center justify-between py-4 first:pt-2 last:pb-2 text-xs">
+                                  <div className="flex items-center space-x-4">
+                                    <div className="w-12 h-16 bg-zinc-900 overflow-hidden border border-[#222] flex-shrink-0">
+                                      {productSlug ? (
+                                        <Link href={`/shop/${productSlug}`} className="block w-full h-full">
+                                          <img src={item.productImage} alt="" className="object-cover w-full h-full hover:scale-105 transition duration-300" />
+                                        </Link>
+                                      ) : (
+                                        <img src={item.productImage} alt="" className="object-cover w-full h-full" />
+                                      )}
+                                    </div>
+                                    <div>
+                                      {productSlug ? (
+                                        <Link href={`/shop/${productSlug}`} className="hover:text-primary transition font-medium">
+                                          <h4 className="font-serif text-zinc-300 hover:underline">{item.productName}</h4>
+                                        </Link>
+                                      ) : (
+                                        <h4 className="font-serif text-zinc-300 font-medium">{item.productName}</h4>
+                                      )}
+                                      <p className="text-[10px] text-zinc-500 mt-1 font-poppins">
+                                        Qty: {item.quantity} {item.variantSize && `| Size: ${item.variantSize}`}
+                                      </p>
+                                    </div>
                                   </div>
-                                  <div>
-                                    <h4 className="font-serif text-zinc-300 font-medium">{item.productName}</h4>
-                                    <p className="text-[10px] text-zinc-500 mt-1 font-poppins">
-                                      Qty: {item.quantity} {item.variantSize && `| Size: ${item.variantSize}`}
-                                    </p>
-                                  </div>
+                                  <span className="font-semibold text-zinc-200">{formatPrice(item.price * item.quantity)}</span>
                                 </div>
-                                <span className="font-semibold text-zinc-200">{formatPrice(item.price * item.quantity)}</span>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
 
                           {/* Delivery Notes */}
