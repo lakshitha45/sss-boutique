@@ -144,9 +144,9 @@ export default function AdminShipmentDashboard() {
   const filteredShipments = shipments.filter(s => {
     const matchesSearch =
       s.id.toLowerCase().includes(search.toLowerCase()) ||
-      s.orderNumber?.toLowerCase().includes(search.toLowerCase()) ||
+      (s.orderNumber ? s.orderNumber.toLowerCase().includes(search.toLowerCase()) : false) ||
       s.trackingNumber.toLowerCase().includes(search.toLowerCase()) ||
-      s.customerName?.toLowerCase().includes(search.toLowerCase());
+      (s.customerName ? s.customerName.toLowerCase().includes(search.toLowerCase()) : false);
 
     const matchesCourier = courierFilter === "all" || s.courierName === courierFilter;
     const matchesStatus = statusFilter === "all" || s.status === statusFilter;

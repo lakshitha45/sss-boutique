@@ -135,7 +135,7 @@ export default function OrderManagementPage() {
         orderId: shippingOrderId,
         courierName: shipCourier,
         trackingNumber: shipTracking.trim(),
-        status: "Shipped",
+        status: "In Transit",
       });
 
       if (res.success) {
@@ -161,7 +161,7 @@ export default function OrderManagementPage() {
           orderId: id,
           courierName: courierName,
           trackingNumber: tempTracking.trim(),
-          status: currentStatus === "Shipped" || currentStatus === "Delivered" ? currentStatus : "Packed"
+          status: currentStatus === "Shipped" || currentStatus === "Delivered" ? (currentStatus === "Shipped" ? "In Transit" : "Delivered") : "Packed"
         });
 
         setEditingTrackingId(null);

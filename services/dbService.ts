@@ -2468,7 +2468,7 @@ export const dbService = {
     let orderStatusValue = "shipped";
     if (shipment.status === "Delivered") orderStatusValue = "delivered";
     else if (shipment.status === "Cancelled" || shipment.status === "Returned") orderStatusValue = "cancelled";
-    else if (shipment.status === "Packed") orderStatusValue = "packed";
+    else if (shipment.status === "Packed" || shipment.status === "Ready For Pickup") orderStatusValue = "packed";
 
     if (isSupabaseConfigured() && supabase) {
       const basePayload = {
@@ -2709,7 +2709,7 @@ export const dbService = {
         let orderStatusValue = "shipped";
         if (updates.status === "Delivered") orderStatusValue = "delivered";
         else if (updates.status === "Cancelled" || updates.status === "Returned") orderStatusValue = "cancelled";
-        else if (updates.status === "Packed") orderStatusValue = "packed";
+        else if (updates.status === "Packed" || updates.status === "Ready For Pickup") orderStatusValue = "packed";
 
         const { data: ord } = await supabase.from("orders").select("status_history").eq("id", current.order_id).single();
         const updatedHistory = [...(ord?.status_history || []), {
@@ -2777,7 +2777,7 @@ export const dbService = {
         let orderStatusValue = "shipped";
         if (updates.status === "Delivered") orderStatusValue = "delivered";
         else if (updates.status === "Cancelled" || updates.status === "Returned") orderStatusValue = "cancelled";
-        else if (updates.status === "Packed") orderStatusValue = "packed";
+        else if (updates.status === "Packed" || updates.status === "Ready For Pickup") orderStatusValue = "packed";
 
         const ordIdx = db.orders.findIndex((o) => o.id === current.orderId);
         if (ordIdx !== -1) {
