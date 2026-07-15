@@ -1302,7 +1302,7 @@ export const dbService = {
         payment_status: "pending",
         order_status: "pending",
         shipping_address: order.shippingAddress,
-        tracking_number: order.trackingNumber,
+        tracking_number: null,
       };
 
       let oData: any;
