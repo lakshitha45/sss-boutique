@@ -99,9 +99,11 @@ export default function CheckoutPage() {
         setPlacedOrder(res.order);
         clearCart(); // Clear local shopping cart
       } else {
+        console.error("[Checkout Failure]:", res.error);
         setError(res.error || "Failed to place your order. Please try again.");
       }
     } catch (err: any) {
+      console.error("[Checkout Exception]:", err);
       setError(err.message || "An unexpected error occurred.");
     } finally {
       setLoading(false);
