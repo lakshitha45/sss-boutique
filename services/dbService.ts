@@ -1527,6 +1527,19 @@ export const dbService = {
   },
 
   async updateOrderStatus(id: string, status: string, trackingNumber?: string, executor: string = "admin"): Promise<Order> {
+    let mappedShipmentStatus: string | null = null;
+    if (status === "Packed") {
+      mappedShipmentStatus = "Packed";
+    } else if (status === "Ready For Shipment") {
+      mappedShipmentStatus = "Ready For Pickup";
+    } else if (status === "Shipped") {
+      mappedShipmentStatus = "In Transit";
+    } else if (status === "Delivered") {
+      mappedShipmentStatus = "Delivered";
+    } else if (status === "Cancelled") {
+      mappedShipmentStatus = "Cancelled";
+    }
+
     if (isSupabaseConfigured() && supabase) {
       const { data: currentOrder, error: fetchErr } = await supabase
         .from("orders")
@@ -1626,6 +1639,36 @@ export const dbService = {
         .single();
       if (error) throw error;
 
+      if (mappedShipmentStatus) {
+        try {
+          const { data: existingShipments } = await supabase
+            .from("shipments")
+            .select("id, timeline")
+            .eq("order_id", id);
+          
+          if (existingShipments && existingShipments.length > 0) {
+            for (const shp of existingShipments) {
+              const updatedTimeline = [...(shp.timeline || []), {
+                status: mappedShipmentStatus,
+                timestamp: new Date().toISOString(),
+                action: `Shipment status updated to ${mappedShipmentStatus} via order state transition`,
+                user: executor
+              }];
+
+              await supabase
+                .from("shipments")
+                .update({
+                  status: mappedShipmentStatus,
+                  timeline: updatedTimeline
+                })
+                .eq("id", shp.id);
+            }
+          }
+        } catch (shpErr) {
+          console.error("Failed to sync status update to shipments table:", shpErr);
+        }
+      }
+
       return {
         id: data.id,
         orderNumber: data.order_number,
@@ -1711,7 +1754,22 @@ export const dbService = {
       db.orders[idx].orderStatus = status;
       db.orders[idx].statusHistory = updatedHistory;
       if (trackingNumber !== undefined) db.orders[idx].trackingNumber = trackingNumber;
-      if (status === "delivered") db.orders[idx].paymentStatus = "paid";
+      if (status === "Delivered" || status === "Shipped" || status === "Ready For Shipment" || status === "Packed" || status === "Order Confirmed" || status === "Processing") {
+        db.orders[idx].paymentStatus = "paid";
+      }
+
+      if (mappedShipmentStatus) {
+        const shpIdx = db.shipments?.findIndex((s) => s.orderId === id);
+        if (shpIdx !== undefined && shpIdx !== -1) {
+          db.shipments[shpIdx].status = mappedShipmentStatus;
+          db.shipments[shpIdx].timeline = [...(db.shipments[shpIdx].timeline || []), {
+            status: mappedShipmentStatus,
+            timestamp: new Date().toISOString(),
+            action: `Shipment status updated to ${mappedShipmentStatus} via order state transition`,
+            user: executor
+          }];
+        }
+      }
 
       writeMockDb(db);
       return db.orders[idx];
