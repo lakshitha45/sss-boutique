@@ -76,18 +76,18 @@ const DEFAULT_BRAND_SETTINGS: BrandSettings = {
   faviconUrl: "/favicon.ico",
 
   // Theme
-  themePreset: "luxury-pink",
+  themePreset: "luxury-black",
 
-  // Colors (Luxury Pink defaults — matches globals.css)
-  primary: "#D45D79",
-  primaryHover: "#C24D68",
-  secondary: "#FFFFFF",
-  accent: "#C8A96A",
+  // Colors (Luxury Black defaults)
+  primary: "#E0E0E0",
+  primaryHover: "#BDBDBD",
+  secondary: "#2D2D2D",
+  accent: "#C5A880",
   accentHover: "#B3966E",
-  background: "#FAFAFA",
-  surface: "#FFFFFF",
-  foreground: "#1C1C1C",
-  border: "#E4E4E7",
+  background: "#0A0A0A",
+  surface: "#141414",
+  foreground: "#F5F5F5",
+  border: "#2A2A2A",
   success: "#2E7D32",
   warning: "#F59E0B",
   error: "#D32F2F",
@@ -240,6 +240,21 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as Partial<BrandSettings>;
+        // Force the theme to be luxury-black (original dark luxury gold theme)
+        parsed.themePreset = "luxury-black";
+        parsed.primary = "#E0E0E0";
+        parsed.primaryHover = "#BDBDBD";
+        parsed.secondary = "#2D2D2D";
+        parsed.accent = "#C5A880";
+        parsed.accentHover = "#B3966E";
+        parsed.background = "#0A0A0A";
+        parsed.surface = "#141414";
+        parsed.foreground = "#F5F5F5";
+        parsed.border = "#2A2A2A";
+        parsed.success = "#10B981";
+        parsed.warning = "#F59E0B";
+        parsed.error = "#EF4444";
+
         if (parsed.facebook === "https://facebook.com/sssboutique") {
           parsed.facebook = "";
         }
