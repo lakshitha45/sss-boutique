@@ -1,6 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { dbService } from "@/services/dbService";
 import { NotificationService } from "@/services/notificationService";
@@ -126,10 +126,17 @@ export async function register(
 ): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
   try {
     if (isSupabaseConfigured() && supabase) {
+      // Determine origin dynamically for verification redirects
+      const headersList = await headers();
+      const host = headersList.get("host") || "";
+      const protocol = host.includes("localhost") || host.includes("127.0.0.1") ? "http" : "https";
+      const origin = host ? `${protocol}://${host}` : "";
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password: password || "defaultPassword123!",
         options: {
+          emailRedirectTo: origin ? `${origin}/auth/callback` : undefined,
           data: {
             full_name: fullName,
             role: "customer",
