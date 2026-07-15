@@ -2223,13 +2223,13 @@ export const dbService = {
         customerName: s.orders?.customer_name,
         customerEmail: s.orders?.customer_email,
         shippingAddress: s.orders?.shipping_address,
-        courierName: s.courier_name,
+        courierName: s.courier_name || s.carrier || "Delhivery",
         trackingNumber: s.tracking_number,
         status: s.status,
-        shippingDate: s.shipping_date,
-        estimatedDeliveryDate: s.estimated_delivery_date,
-        deliveredDate: s.delivered_date,
-        notes: s.notes,
+        shippingDate: s.shipping_date || undefined,
+        estimatedDeliveryDate: s.estimated_delivery_date || s.estimated_delivery || undefined,
+        deliveredDate: s.delivered_date || undefined,
+        notes: s.notes || undefined,
         timeline: s.timeline || [],
         createdAt: s.created_at,
         updatedAt: s.updated_at
@@ -2265,13 +2265,13 @@ export const dbService = {
         customerName: data.orders?.customer_name,
         customerEmail: data.orders?.customer_email,
         shippingAddress: data.orders?.shipping_address,
-        courierName: data.courier_name,
+        courierName: data.courier_name || data.carrier || "Delhivery",
         trackingNumber: data.tracking_number,
         status: data.status,
-        shippingDate: data.shipping_date,
-        estimatedDeliveryDate: data.estimated_delivery_date,
-        deliveredDate: data.delivered_date,
-        notes: data.notes,
+        shippingDate: data.shipping_date || undefined,
+        estimatedDeliveryDate: data.estimated_delivery_date || data.estimated_delivery || undefined,
+        deliveredDate: data.delivered_date || undefined,
+        notes: data.notes || undefined,
         timeline: data.timeline || [],
         createdAt: data.created_at,
         updatedAt: data.updated_at
@@ -2307,63 +2307,112 @@ export const dbService = {
     else if (shipment.status === "Packed") orderStatusValue = "packed";
 
     if (isSupabaseConfigured() && supabase) {
-      const { data, error } = await supabase
-        .from("shipments")
-        .insert([{
-          order_id: shipment.orderId,
-          courier_name: shipment.courierName,
-          tracking_number: shipment.trackingNumber,
-          status: shipment.status,
-          shipping_date: shipment.shippingDate || timestamp,
-          estimated_delivery_date: shipment.estimatedDeliveryDate || null,
-          delivered_date: shipment.deliveredDate || null,
-          notes: shipment.notes || null,
-          timeline: initialTimeline
-        }])
-        .select()
-        .single();
-      if (error) throw error;
-
-      // Update Order tracking and status history
-      const { data: ord } = await supabase.from("orders").select("status_history").eq("id", shipment.orderId).single();
-      const updatedHistory = [...(ord?.status_history || []), {
-        status: orderStatusValue === "shipped" ? "Shipped" : (orderStatusValue === "delivered" ? "Delivered" : "Cancelled"),
-        timestamp,
-        user: "admin",
-        action: `Shipment created. Carrier: ${shipment.courierName}, Tracking: ${shipment.trackingNumber}`
-      }];
-
-      await supabase
-        .from("orders")
-        .update({
-          tracking_number: shipment.trackingNumber,
-          order_status: orderStatusValue,
-          status_history: updatedHistory
-        })
-        .eq("id", shipment.orderId);
-
-      await this.createNotification(
-        "new_order", // type placeholder matching Notification schema
-        "Shipment Dispatched",
-        `Order shipment created. Carrier: ${shipment.courierName}, Waybill: ${shipment.trackingNumber}`
-      );
-
-      await this.logActivity("admin", "Fulfillment shipment created", `Order ID: ${shipment.orderId}`, "127.0.0.1");
-
-      return {
-        id: data.id,
-        orderId: data.order_id,
-        courierName: data.courier_name,
-        trackingNumber: data.tracking_number,
-        status: data.status,
-        shippingDate: data.shipping_date,
-        estimatedDeliveryDate: data.estimated_delivery_date,
-        deliveredDate: data.delivered_date,
-        notes: data.notes,
-        timeline: initialTimeline,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at
+      const basePayload = {
+        order_id: shipment.orderId,
+        tracking_number: shipment.trackingNumber,
+        status: shipment.status,
       };
+
+      try {
+        const { data, error } = await supabase
+          .from("shipments")
+          .insert([{
+            ...basePayload,
+            courier_name: shipment.courierName,
+            shipping_date: shipment.shippingDate || timestamp,
+            estimated_delivery_date: shipment.estimatedDeliveryDate || null,
+            delivered_date: shipment.deliveredDate || null,
+            notes: shipment.notes || null,
+            timeline: initialTimeline
+          }])
+          .select()
+          .single();
+        if (error) throw error;
+
+        // Update Order tracking and status history
+        const { data: ord } = await supabase.from("orders").select("status_history").eq("id", shipment.orderId).single();
+        const updatedHistory = [...(ord?.status_history || []), {
+          status: orderStatusValue === "shipped" ? "Shipped" : (orderStatusValue === "delivered" ? "Delivered" : "Cancelled"),
+          timestamp,
+          user: "admin",
+          action: `Shipment created. Carrier: ${shipment.courierName}, Tracking: ${shipment.trackingNumber}`
+        }];
+
+        await supabase
+          .from("orders")
+          .update({
+            tracking_number: shipment.trackingNumber,
+            order_status: orderStatusValue,
+            status_history: updatedHistory
+          })
+          .eq("id", shipment.orderId);
+
+        await this.createNotification(
+          "new_order", // type placeholder matching Notification schema
+          "Shipment Dispatched",
+          `Order shipment created. Carrier: ${shipment.courierName}, Waybill: ${shipment.trackingNumber}`
+        );
+
+        return {
+          id: data.id,
+          orderId: data.order_id,
+          courierName: data.courier_name,
+          trackingNumber: data.tracking_number,
+          status: data.status,
+          shippingDate: data.shipping_date,
+          estimatedDeliveryDate: data.estimated_delivery_date,
+          deliveredDate: data.delivered_date,
+          notes: data.notes,
+          timeline: data.timeline || [],
+          createdAt: data.created_at,
+          updatedAt: data.updated_at
+        };
+      } catch (err: any) {
+        if (err.code === "42703" || (err.message && err.message.toLowerCase().includes("column"))) {
+          console.warn("Shipments table lacks phase 6 schema columns. Retrying with base columns mapping.");
+          const { data, error } = await supabase
+            .from("shipments")
+            .insert([{
+              ...basePayload,
+              carrier: shipment.courierName,
+              estimated_delivery: shipment.estimatedDeliveryDate || null,
+            }])
+            .select()
+            .single();
+          if (error) throw error;
+
+          // Update Order tracking and status history
+          const { data: ord } = await supabase.from("orders").select("status_history").eq("id", shipment.orderId).single();
+          const updatedHistory = [...(ord?.status_history || []), {
+            status: orderStatusValue === "shipped" ? "Shipped" : (orderStatusValue === "delivered" ? "Delivered" : "Cancelled"),
+            timestamp,
+            user: "admin",
+            action: `Shipment created. Carrier: ${shipment.courierName}, Tracking: ${shipment.trackingNumber}`
+          }];
+
+          await supabase
+            .from("orders")
+            .update({
+              tracking_number: shipment.trackingNumber,
+              order_status: orderStatusValue,
+              status_history: updatedHistory
+            })
+            .eq("id", shipment.orderId);
+
+          return {
+            id: data.id,
+            orderId: data.order_id,
+            courierName: data.carrier,
+            trackingNumber: data.tracking_number,
+            status: data.status,
+            estimatedDeliveryDate: data.estimated_delivery,
+            createdAt: data.created_at,
+            updatedAt: data.updated_at,
+            timeline: [],
+          };
+        }
+        throw err;
+      }
     } else {
       const db = initMockDb();
       const newShipmentId = `shp_${Date.now()}`;
