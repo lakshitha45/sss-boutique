@@ -1236,7 +1236,13 @@ export const dbService = {
         tax: Number(o.tax),
         grandTotal: Number(o.grand_total),
         paymentStatus: o.payment_status,
-        orderStatus: o.order_status,
+        orderStatus: 
+          o.order_status === "cancelled" ? "Cancelled" :
+          o.order_status === "delivered" ? "Delivered" :
+          o.order_status === "shipped" ? "Shipped" :
+          o.order_status === "packed" ? (o.tracking_number ? "Ready For Shipment" : "Packed") :
+          o.order_status === "confirmed" ? "Order Confirmed" :
+          o.payment_status === "paid" ? "Payment Received" : "Pending Payment",
         shippingAddress: o.shipping_address,
         trackingNumber: o.tracking_number,
         orderNotes: o.order_notes || undefined,
@@ -1421,7 +1427,7 @@ export const dbService = {
         id: oData.id,
         orderNumber,
         paymentStatus: "pending",
-        orderStatus: "pending",
+        orderStatus: "Pending Payment",
         orderNotes: oData.order_notes || undefined,
         createdAt: oData.created_at,
         statusHistory: initialHistory,
@@ -1445,7 +1451,7 @@ export const dbService = {
         id: newOrderId,
         orderNumber,
         paymentStatus: "pending",
-        orderStatus: "pending",
+        orderStatus: "Pending Payment",
         createdAt: new Date().toISOString(),
         statusHistory: initialHistory,
         items: order.items.map((item, index) => ({
@@ -1577,10 +1583,19 @@ export const dbService = {
       let mappedOrderStatus = "pending";
       let mappedPaymentStatus = currentOrder.payment_status;
 
-      if (status === "Order Confirmed" || status === "Processing") {
+      if (status === "Pending Payment") {
+        mappedOrderStatus = "pending";
+        mappedPaymentStatus = "pending";
+      } else if (status === "Payment Received") {
         mappedOrderStatus = "confirmed";
         mappedPaymentStatus = "paid";
-      } else if (status === "Packed" || status === "Ready For Shipment") {
+      } else if (status === "Order Confirmed" || status === "Processing") {
+        mappedOrderStatus = "confirmed";
+        mappedPaymentStatus = "paid";
+      } else if (status === "Packed") {
+        mappedOrderStatus = "packed";
+        mappedPaymentStatus = "paid";
+      } else if (status === "Ready For Shipment") {
         mappedOrderStatus = "packed";
         mappedPaymentStatus = "paid";
       } else if (status === "Shipped") {
