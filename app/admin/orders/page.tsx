@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { fetchOrders, changeOrderStatus, getExportCsv } from "@/features/orders/orderActions";
-import { createNewShipment } from "@/features/shipments/shipmentActions";
+import { createNewShipment, fetchShipments } from "@/features/shipments/shipmentActions";
 import { Order } from "@/types";
 import { formatPrice } from "@/utils";
 import { motion as m, AnimatePresence } from "framer-motion";
@@ -37,7 +37,7 @@ const DATE_FILTERS = [
   { value: "month", label: "Last 30 Days" }
 ];
 
-const COURIERS_LIST = ["Delhivery", "Blue Dart", "DTDC", "DHL Express", "FedEx India", "UPS India"];
+const COURIERS_LIST = ["Not Assigned", "Delhivery", "Blue Dart", "DTDC", "DHL Express", "FedEx India", "UPS India"];
 
 export default function OrderManagementPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -69,12 +69,20 @@ export default function OrderManagementPage() {
 
   const loadOrdersData = async () => {
     try {
-      const allOrders = await fetchOrders();
+      const [allOrders, allShipments] = await Promise.all([
+        fetchOrders(),
+        fetchShipments()
+      ]);
       setOrders(allOrders);
 
       const couriers: Record<string, string> = {};
       allOrders.forEach((ord) => {
-        couriers[ord.id] = ord.trackingNumber ? COURIERS_LIST[Math.floor((ord.grandTotal % 6))] : "Delhivery";
+        const matchingShipment = allShipments.find((s) => s.orderId === ord.id);
+        if (matchingShipment) {
+          couriers[ord.id] = matchingShipment.courierName || "Delhivery";
+        } else {
+          couriers[ord.id] = "Not Assigned";
+        }
       });
       setSelectedCouriers(couriers);
     } catch (err) {
@@ -472,8 +480,8 @@ export default function OrderManagementPage() {
                       </div>
                     ) : (
                       <div className="flex items-center justify-between text-[11px] bg-[#0A0A0A] border border-[#1C1C1C] p-2.5 font-mono">
-                        <span className="truncate max-w-[150px] font-semibold text-accent">
-                          {order.trackingNumber || "No tracking key"}
+                        <span className={`truncate max-w-[150px] ${order.trackingNumber ? "font-semibold text-accent" : "text-zinc-500"}`}>
+                          {order.trackingNumber || "Not Assigned"}
                         </span>
                         <button
                           onClick={() => {
