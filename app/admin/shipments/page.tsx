@@ -8,7 +8,7 @@ import { formatPrice } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, AlertCircle, Edit2, Trash2, Check, Truck, Clock, Eye, Calendar, User, Phone, MapPin, X, ArrowUpDown, Filter, Plus } from "lucide-react";
 
-const COURIER_OPTIONS = ["Professional Courier", "DTDC", "Blue Dart", "Delhivery", "India Post", "Other"];
+const COURIER_OPTIONS = ["Professional Couriers", "DTDC", "Blue Dart", "Delhivery", "India Post", "Other"];
 
 const STATUS_OPTIONS = [
   "Shipment Pending",

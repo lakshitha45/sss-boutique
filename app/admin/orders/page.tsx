@@ -37,7 +37,7 @@ const DATE_FILTERS = [
   { value: "month", label: "Last 30 Days" }
 ];
 
-const COURIERS_LIST = ["Not Assigned", "Delhivery", "Blue Dart", "DTDC", "DHL Express", "FedEx India", "UPS India"];
+const COURIERS_LIST = ["Not Assigned", "Professional Couriers", "Delhivery", "Blue Dart", "DTDC", "India Post", "DHL Express", "FedEx India", "UPS India"];
 
 export default function OrderManagementPage() {
   const [orders, setOrders] = useState<Order[]>([]);
