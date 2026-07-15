@@ -2347,7 +2347,7 @@ export const dbService = {
       };
 
       try {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from("shipments")
           .insert([{
             ...basePayload,
@@ -2360,7 +2360,21 @@ export const dbService = {
           }])
           .select()
           .single();
-        if (error) throw error;
+
+        if (error) {
+          if (error.code === "23505" || (error.message && error.message.toLowerCase().includes("unique constraint"))) {
+            console.warn("Tracking number already exists. Fetching existing shipment record instead of throwing.");
+            const { data: existing, error: getErr } = await supabase
+              .from("shipments")
+              .select("*")
+              .eq("tracking_number", shipment.trackingNumber)
+              .single();
+            if (getErr) throw error;
+            data = existing;
+          } else {
+            throw error;
+          }
+        }
 
         // Update Order tracking and status history
         const { data: ord } = await supabase.from("orders").select("status_history").eq("id", shipment.orderId).single();
@@ -2403,7 +2417,7 @@ export const dbService = {
       } catch (err: any) {
         if (err.code === "42703" || (err.message && err.message.toLowerCase().includes("column"))) {
           console.warn("Shipments table lacks phase 6 schema columns. Retrying with base columns mapping.");
-          const { data, error } = await supabase
+          let { data, error } = await supabase
             .from("shipments")
             .insert([{
               ...basePayload,
@@ -2412,7 +2426,21 @@ export const dbService = {
             }])
             .select()
             .single();
-          if (error) throw error;
+
+          if (error) {
+            if (error.code === "23505" || (error.message && error.message.toLowerCase().includes("unique constraint"))) {
+              console.warn("Tracking number already exists. Fetching existing shipment record instead of throwing.");
+              const { data: existing, error: getErr } = await supabase
+                .from("shipments")
+                .select("*")
+                .eq("tracking_number", shipment.trackingNumber)
+                .single();
+              if (getErr) throw error;
+              data = existing;
+            } else {
+              throw error;
+            }
+          }
 
           // Update Order tracking and status history
           const { data: ord } = await supabase.from("orders").select("status_history").eq("id", shipment.orderId).single();
