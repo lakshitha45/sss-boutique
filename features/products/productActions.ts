@@ -47,6 +47,7 @@ export async function saveProduct(
     variants?: { size: string; stock: number; sku?: string }[];
     metaTitle?: string;
     metaDescription?: string;
+    taxInclusive?: boolean;
   }
 ): Promise<{ success: boolean; product?: Product; error?: string }> {
   try {
@@ -112,6 +113,7 @@ export async function saveProduct(
         variants: variantsPayload,
         metaTitle: productData.metaTitle,
         metaDescription: productData.metaDescription,
+        taxInclusive: productData.taxInclusive,
       });
     } else {
       product = await dbService.createProduct({
@@ -132,6 +134,7 @@ export async function saveProduct(
         variants: variantsPayload,
         metaTitle: productData.metaTitle,
         metaDescription: productData.metaDescription,
+        taxInclusive: productData.taxInclusive,
       });
     }
 

@@ -29,6 +29,7 @@ import {
   ChevronRight,
   Command,
   Truck,
+  Receipt,
 } from "lucide-react";
 import { fetchNotifications, markNotificationAsRead } from "@/features/orders/orderActions";
 
@@ -132,6 +133,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       label: "Insights",
       links: [
         { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+        { name: "GST Reports", href: "/admin/gst", icon: Receipt },
         { name: "Settings", href: "/admin/settings", icon: Settings },
       ],
     },

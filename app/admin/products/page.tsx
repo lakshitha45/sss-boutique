@@ -76,6 +76,7 @@ export default function ProductsPage() {
     seoTitle: "",
     seoDescription: "",
     status: "published",
+    taxInclusive: false,
   });
 
   // Size stocks for Step 4
@@ -191,6 +192,7 @@ export default function ProductsPage() {
       seoTitle: "",
       seoDescription: "",
       status: "published",
+      taxInclusive: false,
     });
     setSizeStocks({ XS: "10", S: "10", M: "10", L: "10", XL: "10", XXL: "10" });
     setFormImages([]);
@@ -233,6 +235,7 @@ export default function ProductsPage() {
       seoTitle: product.metaTitle || product.name,
       seoDescription: product.metaDescription || product.description,
       status: product.active ? "published" : "draft",
+      taxInclusive: product.taxInclusive || false,
     };
     setFormFields(initFields);
 
@@ -263,7 +266,7 @@ export default function ProductsPage() {
     setIsModalOpen(true);
   };
 
-  const handleFieldChange = (key: keyof typeof formFields, val: string) => {
+  const handleFieldChange = (key: keyof typeof formFields, val: any) => {
     setIsFormDirty(true);
     setFormFields((prev) => {
       const next = { ...prev, [key]: val };
@@ -627,6 +630,7 @@ export default function ProductsPage() {
       careInstructions: formFields.careInstructions.trim(),
       featured: false,
       active: formFields.status === "published",
+      taxInclusive: formFields.taxInclusive,
       images: formImages.map((img) => ({
         imageUrl: img.imageUrl,
         isPrimary: img.isPrimary,
@@ -1485,6 +1489,19 @@ export default function ProductsPage() {
                             placeholder="e.g. 8999"
                           />
                         </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2 pt-2">
+                        <input
+                          type="checkbox"
+                          id="taxInclusive"
+                          checked={formFields.taxInclusive}
+                          onChange={(e) => handleFieldChange("taxInclusive", e.target.checked)}
+                          className="w-4 h-4 rounded border-[#1F1F1F] bg-[#0A0A0A] text-accent focus:ring-accent accent-accent cursor-pointer"
+                        />
+                        <label htmlFor="taxInclusive" className="text-xs text-zinc-400 select-none cursor-pointer">
+                          Price is inclusive of 18% GST (Calculated within the price during checkout)
+                        </label>
                       </div>
                     </motion.div>
                   )}

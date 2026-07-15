@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import { Product, Category, ProductImage, ProductVariant, Order, UserProfile, ActivityLog, Address, Notification, Shipment, NotificationLog, NotificationPreferences, NotificationType, NotificationChannel, HomepageBanner, Coupon } from "@/types";
+import { Product, Category, ProductImage, ProductVariant, Order, UserProfile, ActivityLog, Address, Notification, Shipment, NotificationLog, NotificationPreferences, NotificationType, NotificationChannel, HomepageBanner, Coupon, GstLog } from "@/types";
 
 const MOCK_DB_DIR = path.join(process.cwd(), "data");
 const MOCK_DB_PATH = path.join(MOCK_DB_DIR, "db.json");
@@ -148,6 +148,7 @@ interface MockSchema {
   banners: HomepageBanner[];
   coupons: Coupon[];
   reviews: any[];
+  gst_logs: GstLog[];
 }
 
 const initMockDb = (): MockSchema => {
@@ -245,7 +246,8 @@ const initMockDb = (): MockSchema => {
       notification_preferences: [],
       banners: [],
       coupons: [],
-      reviews: []
+      reviews: [],
+      gst_logs: []
     };
 
     fs.writeFileSync(MOCK_DB_PATH, JSON.stringify(initialData, null, 2), "utf8");
@@ -270,6 +272,7 @@ const initMockDb = (): MockSchema => {
     if (!data.banners) data.banners = [];
     if (!data.coupons) data.coupons = [];
     if (!data.reviews) data.reviews = [];
+    if (!data.gst_logs) data.gst_logs = [];
     return data;
   } catch (err) {
     console.error("Error reading local DB:", err);
@@ -288,7 +291,8 @@ const initMockDb = (): MockSchema => {
       notification_preferences: [],
       banners: [],
       coupons: [],
-      reviews: []
+      reviews: [],
+      gst_logs: []
     };
   }
 };
@@ -594,6 +598,7 @@ export const dbService = {
         active: p.active,
         metaTitle: p.meta_title || undefined,
         metaDescription: p.meta_description || undefined,
+        taxInclusive: p.tax_inclusive || false,
         createdAt: p.created_at,
         updatedAt: p.updated_at,
         images: (p.product_images || []).map((img: any) => ({
@@ -681,6 +686,7 @@ export const dbService = {
         active: data.active,
         metaTitle: data.meta_title || undefined,
         metaDescription: data.meta_description || undefined,
+        taxInclusive: data.tax_inclusive || false,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         images: (data.product_images || []).map((img: any) => ({
@@ -749,10 +755,11 @@ export const dbService = {
         care_instructions: product.careInstructions,
         featured: product.featured,
         active: product.active,
+        tax_inclusive: product.taxInclusive || false,
       };
 
       try {
-        const { data: pData, error: pErr } = await supabase
+        let { data: pData, error: pErr } = await supabase
           .from("products")
           .insert([{
             ...basePayload,
@@ -761,7 +768,27 @@ export const dbService = {
           }])
           .select()
           .single();
-        if (pErr) throw pErr;
+        if (pErr) {
+          // Fallback if tax_inclusive column is missing
+          if (pErr.code === "42703" || (pErr.message && pErr.message.toLowerCase().includes("column"))) {
+            console.warn("Products table lacks tax_inclusive column. Retrying insert without it.");
+            const baseMapped = { ...basePayload };
+            delete (baseMapped as any).tax_inclusive;
+            const retryRes = await supabase
+              .from("products")
+              .insert([{
+                ...baseMapped,
+                meta_title: product.metaTitle || null,
+                meta_description: product.metaDescription || null,
+              }])
+              .select()
+              .single();
+            if (retryRes.error) throw retryRes.error;
+            pData = retryRes.data;
+          } else {
+            throw pErr;
+          }
+        }
 
         const imagesToInsert = product.images.map((img) => ({
           product_id: pData.id,
@@ -790,7 +817,7 @@ export const dbService = {
           .select();
         if (varsErr) throw varsErr;
 
-        await this.logActivity("admin_1", "Added Product", `SKU: ${product.sku} Name: ${product.productName}`);
+        await this.logActivity("admin_1", "Created Product", `SKU: ${product.sku} Name: ${product.productName}`);
 
         return {
           ...pData,
@@ -803,6 +830,7 @@ export const dbService = {
           careInstructions: pData.care_instructions,
           metaTitle: pData.meta_title || undefined,
           metaDescription: pData.meta_description || undefined,
+          taxInclusive: pData.tax_inclusive || false,
           metadata: {
             material: pData.material,
             care: pData.care_instructions,
@@ -990,6 +1018,7 @@ export const dbService = {
       if (updates.active !== undefined) mapped.active = updates.active;
       if (updates.metaTitle !== undefined) mapped.meta_title = updates.metaTitle;
       if (updates.metaDescription !== undefined) mapped.meta_description = updates.metaDescription;
+      if (updates.taxInclusive !== undefined) mapped.tax_inclusive = updates.taxInclusive;
 
       if (updates.variants) {
         mapped.stock = updates.variants.reduce((sum, v) => sum + v.stock, 0);
@@ -1039,6 +1068,7 @@ export const dbService = {
           const baseMapped = { ...mapped };
           delete baseMapped.meta_title;
           delete baseMapped.meta_description;
+          delete baseMapped.tax_inclusive;
 
           const { data: pData, error: pErr } = await supabase
             .from("products")
@@ -1364,12 +1394,26 @@ export const dbService = {
         }
       }
 
+      // Log GST details
+      try {
+        await this.createGstLog({
+          orderId: oData.id,
+          customerName: order.customerName,
+          customerEmail: order.customerEmail,
+          baseAmount: order.subtotal,
+          gstAmount: order.tax,
+          grandTotal: order.grandTotal
+        });
+      } catch (gstErr) {
+        console.error("Failed to log GST transaction:", gstErr);
+      }
+
       await this.logActivity(order.userId || "guest", "Customer placed order", `Order Number: ${orderNumber}`, "127.0.0.1");
 
       await this.createNotification(
         "new_order",
         "New Order Placed",
-        `Order ${orderNumber} placed by ${order.customerName} for a total of $${order.grandTotal}.`
+        `Order ${orderNumber} placed by ${order.customerName} for a total of ₹${order.grandTotal}.`
       );
 
       return {
@@ -1439,11 +1483,25 @@ export const dbService = {
 
       db.orders.push(newOrder);
 
+      // Log GST
+      if (!db.gst_logs) db.gst_logs = [];
+      db.gst_logs.push({
+        id: `gst_${Date.now()}`,
+        orderId: newOrder.id,
+        orderNumber: newOrder.orderNumber,
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        baseAmount: order.subtotal,
+        gstAmount: order.tax,
+        grandTotal: order.grandTotal,
+        createdAt: new Date().toISOString()
+      });
+
       db.notifications.push({
         id: `notif_${Date.now()}`,
         type: "new_order",
         title: "New Order Placed",
-        message: `Order ${orderNumber} placed by ${order.customerName} for a total of $${order.grandTotal}.`,
+        message: `Order ${orderNumber} placed by ${order.customerName} for a total of ₹${order.grandTotal}.`,
         read: false,
         createdAt: new Date().toISOString(),
       });
@@ -2933,6 +2991,81 @@ export const dbService = {
       db.reviews = db.reviews.filter((r: any) => r.id !== id);
       writeMockDb(db);
       return db.reviews.length < len;
+    }
+  },
+
+  // --- GST LOGS ---
+  async getGstLogs(): Promise<GstLog[]> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("gst_logs")
+        .select("*, orders(order_number)")
+        .order("created_at", { ascending: false });
+      if (error) {
+        console.warn("Could not query gst_logs, table might not exist yet:", error.message);
+        return [];
+      }
+      return (data || []).map((g: any) => ({
+        id: g.id,
+        orderId: g.order_id,
+        orderNumber: g.orders?.order_number || "N/A",
+        customerName: g.customer_name,
+        customerEmail: g.customer_email,
+        baseAmount: Number(g.base_amount),
+        gstAmount: Number(g.gst_amount),
+        grandTotal: Number(g.grand_total),
+        createdAt: g.created_at,
+      }));
+    } else {
+      const db = initMockDb();
+      return db.gst_logs || [];
+    }
+  },
+
+  async createGstLog(log: Omit<GstLog, "id" | "createdAt">): Promise<GstLog> {
+    const timestamp = new Date().toISOString();
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("gst_logs")
+        .insert([{
+          order_id: log.orderId,
+          customer_name: log.customerName,
+          customer_email: log.customerEmail,
+          base_amount: log.baseAmount,
+          gst_amount: log.gstAmount,
+          grand_total: log.grandTotal,
+        }])
+        .select()
+        .single();
+      if (error) {
+        console.warn("Failed to insert gst_logs, table might not exist yet:", error.message);
+        return {
+          id: `gst_${Date.now()}`,
+          ...log,
+          createdAt: timestamp
+        };
+      }
+      return {
+        id: data.id,
+        orderId: data.order_id,
+        customerName: data.customer_name,
+        customerEmail: data.customer_email,
+        baseAmount: Number(data.base_amount),
+        gstAmount: Number(data.gst_amount),
+        grandTotal: Number(data.grand_total),
+        createdAt: data.created_at,
+      };
+    } else {
+      const db = initMockDb();
+      if (!db.gst_logs) db.gst_logs = [];
+      const newLog: GstLog = {
+        id: `gst_${Date.now()}`,
+        ...log,
+        createdAt: timestamp,
+      };
+      db.gst_logs.push(newLog);
+      writeMockDb(db);
+      return newLog;
     }
   }
 };

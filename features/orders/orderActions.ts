@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { dbService } from "@/services/dbService";
 import { NotificationService } from "@/services/notificationService";
-import { Order } from "@/types";
+import { Order, GstLog } from "@/types";
 
 export async function placeOrder(
   orderData: Omit<Order, "id" | "createdAt" | "orderNumber" | "paymentStatus" | "orderStatus">
@@ -169,5 +169,14 @@ export async function getExportCsv(type: "orders" | "customers" | "products") {
   } catch (err) {
     console.error("Failed to export data", err);
     return "";
+  }
+}
+
+export async function fetchGstLogs(): Promise<GstLog[]> {
+  try {
+    return await dbService.getGstLogs();
+  } catch (err) {
+    console.error("Failed to fetch GST logs", err);
+    return [];
   }
 }

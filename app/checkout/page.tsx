@@ -35,6 +35,29 @@ export default function CheckoutPage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
+  // Compute GST and subtotal values dynamically
+  let calculatedSubtotal = 0;
+  let calculatedTax = 0;
+
+  cart.forEach((item) => {
+    const price = item.product?.price || 0;
+    const qty = item.quantity;
+    const total = price * qty;
+
+    if (item.product?.taxInclusive) {
+      const base = total / 1.18;
+      const tax = total - base;
+      calculatedSubtotal += base;
+      calculatedTax += tax;
+    } else {
+      const tax = total * 0.18;
+      calculatedSubtotal += total;
+      calculatedTax += tax;
+    }
+  });
+
+  const grandTotal = calculatedSubtotal + calculatedTax;
+
   // Redirect if not logged in
   useEffect(() => {
     if (!isLoading && !user) {
@@ -72,15 +95,37 @@ export default function CheckoutPage() {
     setLoading(true);
 
     try {
+      let calculatedSubtotal = 0;
+      let calculatedTax = 0;
+
+      cart.forEach((item) => {
+        const price = item.product?.price || 0;
+        const qty = item.quantity;
+        const total = price * qty;
+
+        if (item.product?.taxInclusive) {
+          const base = total / 1.18;
+          const tax = total - base;
+          calculatedSubtotal += base;
+          calculatedTax += tax;
+        } else {
+          const tax = total * 0.18;
+          calculatedSubtotal += total;
+          calculatedTax += tax;
+        }
+      });
+
+      const grandTotal = calculatedSubtotal + calculatedTax;
+
       const orderPayload = {
         userId: user?.id || undefined,
         customerName: data.fullName,
         customerEmail: data.email,
-        subtotal: cartTotal,
+        subtotal: Number(calculatedSubtotal.toFixed(2)),
         discount: 0,
         shipping: 0,
-        tax: 0,
-        grandTotal: cartTotal,
+        tax: Number(calculatedTax.toFixed(2)),
+        grandTotal: Number(grandTotal.toFixed(2)),
         shippingAddress: {
           fullName: data.fullName,
           addressLine1: data.addressLine1,
@@ -378,22 +423,22 @@ export default function CheckoutPage() {
                 </div>
 
                 {/* Subtotals */}
-                <div className="border-t border-zinc-100 pt-4 space-y-2 text-xs font-poppins">
-                  <div className="flex justify-between items-center text-zinc-500 font-light">
-                    <span>Subtotal</span>
-                    <PriceTag price={cartTotal} size="sm" />
+                <div className="border-t border-[#1C1C1C] pt-4 space-y-2 text-xs font-poppins text-zinc-400">
+                  <div className="flex justify-between items-center font-light">
+                    <span>Subtotal (Base)</span>
+                    <PriceTag price={calculatedSubtotal} size="sm" />
                   </div>
-                  <div className="flex justify-between items-center text-zinc-500 font-light">
+                  <div className="flex justify-between items-center font-light">
                     <span>Shipping</span>
-                    <span className="text-accent uppercase font-semibold">Free Express</span>
+                    <span className="text-accent uppercase font-semibold text-[10px] tracking-wider">Free Express</span>
                   </div>
-                  <div className="flex justify-between items-center text-zinc-500 font-light">
-                    <span>Tax</span>
-                    <PriceTag price={0} size="sm" />
+                  <div className="flex justify-between items-center font-light">
+                    <span>Estimated GST (18%)</span>
+                    <PriceTag price={calculatedTax} size="sm" />
                   </div>
-                  <div className="flex justify-between items-center text-foreground text-sm font-bold pt-3 border-t border-zinc-100">
-                    <span>Total</span>
-                    <PriceTag price={cartTotal} size="md" />
+                  <div className="flex justify-between items-center text-foreground text-sm font-bold pt-3 border-t border-[#1C1C1C]">
+                    <span>Total (Payable)</span>
+                    <PriceTag price={grandTotal} size="md" />
                   </div>
                 </div>
               </aside>

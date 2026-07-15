@@ -65,6 +65,7 @@ export interface Product {
   };
   metaTitle?: string;
   metaDescription?: string;
+  taxInclusive?: boolean;
 }
 
 export interface UserProfile {
@@ -395,3 +396,14 @@ export interface Shipment {
   updatedAt: string;
 }
 
+export interface GstLog {
+  id: string;
+  orderId: string;
+  orderNumber?: string;
+  customerName: string;
+  customerEmail: string;
+  baseAmount: number;
+  gstAmount: number;
+  grandTotal: number;
+  createdAt: string;
+}
