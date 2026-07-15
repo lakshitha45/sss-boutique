@@ -99,11 +99,7 @@ export default function OrderManagementPage() {
   const handleStatusChange = async (id: string, status: string) => {
     if (status === "Shipped") {
       const order = orders.find((o) => o.id === id);
-      if (order && order.trackingNumber) {
-        if (!confirm(`Are you sure you want to transition this order to Shipped? Tracking ID ${order.trackingNumber} is already assigned.`)) {
-          return;
-        }
-      } else {
+      if (!order || !order.trackingNumber) {
         setShippingOrderId(id);
         setShipCourier(selectedCouriers[id] || "Delhivery");
         setShipTracking("");
