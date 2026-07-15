@@ -34,7 +34,7 @@ function RegisterForm() {
   const { register: registerAuth, user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectPath = searchParams.get("redirect") || "/shop";
+  const redirectPath = searchParams.get("redirect") || "/";
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

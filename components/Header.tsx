@@ -171,7 +171,7 @@ export const Header: React.FC = () => {
                 </div>
               ) : (
                 <Link
-                  href="/login"
+                  href={`/login?redirect=${encodeURIComponent(pathname)}`}
                   className="flex items-center space-x-1 text-foreground/80 hover:text-primary transition"
                   aria-label="Login"
                 >
@@ -284,7 +284,7 @@ export const Header: React.FC = () => {
                 </>
               ) : (
                 <Link
-                  href="/login"
+                  href={`/login?redirect=${encodeURIComponent(pathname)}`}
                   onClick={() => setMobileMenuOpen(false)}
                   className="block py-2 text-foreground/80 hover:text-primary transition"
                 >

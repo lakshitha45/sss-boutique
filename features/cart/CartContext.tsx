@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { CartItem, Product } from "@/types";
+import { useAuth } from "@/features/auth/AuthContext";
+import { useRouter } from "next/navigation";
 
 interface CartContextType {
   cart: CartItem[];
@@ -21,6 +23,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const { user } = useAuth();
+  const router = useRouter();
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -49,6 +53,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [cart, isLoaded]);
 
   const addToCart = (product: Product, quantity = 1, size?: string, color?: string) => {
+    if (!user) {
+      const currentUrl = encodeURIComponent(window.location.pathname + window.location.search);
+      router.push(`/login?redirect=${currentUrl}`);
+      return;
+    }
     setCart((prevCart) => {
       // Find if item already exists with the exact same size/color
       const existingIndex = prevCart.findIndex(

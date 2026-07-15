@@ -75,7 +75,7 @@ export const MobileBottomNav: React.FC = () => {
 
       {/* Account */}
       <Link
-        href={user ? "/orders" : "/login"}
+        href={user ? "/orders" : `/login?redirect=${encodeURIComponent(pathname)}`}
         className={`flex flex-col items-center justify-center space-y-0.5 p-1 w-12 transition ${
           isActive("/orders") || isActive("/login") ? "text-primary" : "text-zinc-400 hover:text-zinc-700"
         }`}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useCart } from "@/features/cart/CartContext";
 import { useAuth } from "@/features/auth/AuthContext";
 import { placeOrder } from "@/features/orders/orderActions";
@@ -13,6 +13,7 @@ import { Input, Select, Button, PriceTag, EmptyState } from "@/components";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useRouter } from "next/navigation";
 
 const checkoutSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters"),
@@ -31,7 +32,15 @@ type CheckoutFormData = z.infer<typeof checkoutSchema>;
 
 export default function CheckoutPage() {
   const { cart, cartTotal, clearCart } = useCart();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push("/login?redirect=/checkout");
+    }
+  }, [user, isLoading, router]);
 
   // Success state
   const [placedOrder, setPlacedOrder] = useState<any>(null);
