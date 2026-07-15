@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import { Product, Category, ProductImage, ProductVariant, Order, UserProfile, ActivityLog, Address, Notification, Shipment, NotificationLog, NotificationPreferences, NotificationType, NotificationChannel } from "@/types";
+import { Product, Category, ProductImage, ProductVariant, Order, UserProfile, ActivityLog, Address, Notification, Shipment, NotificationLog, NotificationPreferences, NotificationType, NotificationChannel, HomepageBanner, Coupon } from "@/types";
 
 const MOCK_DB_DIR = path.join(process.cwd(), "data");
 const MOCK_DB_PATH = path.join(MOCK_DB_DIR, "db.json");
@@ -145,6 +145,9 @@ interface MockSchema {
   shipments: Shipment[];
   notification_logs: NotificationLog[];
   notification_preferences: NotificationPreferences[];
+  banners: HomepageBanner[];
+  coupons: Coupon[];
+  reviews: any[];
 }
 
 const initMockDb = (): MockSchema => {
@@ -240,6 +243,9 @@ const initMockDb = (): MockSchema => {
       shipments: [],
       notification_logs: [],
       notification_preferences: [],
+      banners: [],
+      coupons: [],
+      reviews: []
     };
 
     fs.writeFileSync(MOCK_DB_PATH, JSON.stringify(initialData, null, 2), "utf8");
@@ -261,6 +267,9 @@ const initMockDb = (): MockSchema => {
     if (!data.shipments) data.shipments = [];
     if (!data.notification_logs) data.notification_logs = [];
     if (!data.notification_preferences) data.notification_preferences = [];
+    if (!data.banners) data.banners = [];
+    if (!data.coupons) data.coupons = [];
+    if (!data.reviews) data.reviews = [];
     return data;
   } catch (err) {
     console.error("Error reading local DB:", err);
@@ -277,6 +286,9 @@ const initMockDb = (): MockSchema => {
       shipments: [],
       notification_logs: [],
       notification_preferences: [],
+      banners: [],
+      coupons: [],
+      reviews: []
     };
   }
 };
@@ -1639,6 +1651,27 @@ export const dbService = {
     return db.users;
   },
 
+  async getProfiles(): Promise<UserProfile[]> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*");
+      if (error) throw error;
+      return (data || []).map((d: any) => ({
+        id: d.id,
+        email: d.email,
+        fullName: d.full_name,
+        phone: d.phone,
+        avatar: d.avatar || undefined,
+        role: d.role,
+        createdAt: d.created_at
+      }));
+    } else {
+      const db = initMockDb();
+      return db.users;
+    }
+  },
+
   async createMockUser(user: Omit<UserProfile, "id" | "createdAt">): Promise<UserProfile> {
     const db = initMockDb();
     const newUser: UserProfile = {
@@ -2636,6 +2669,242 @@ export const dbService = {
       db.shipments = db.shipments.filter((x) => x.id !== id);
       writeMockDb(db);
       return db.shipments.length < initialLength;
+    }
+  },
+
+  // --- BANNERS ---
+  async getBanners(): Promise<HomepageBanner[]> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("homepage_banners")
+        .select("*")
+        .order("priority", { ascending: true });
+      if (error) throw error;
+      return (data || []).map((b: any) => ({
+        id: b.id,
+        title: b.title,
+        imageUrl: b.image_url,
+        buttonText: b.button_text,
+        buttonLink: b.button_link,
+        priority: b.priority,
+        active: b.active,
+      }));
+    } else {
+      const db = initMockDb();
+      return db.banners || [];
+    }
+  },
+
+  async saveBanner(banner: HomepageBanner): Promise<HomepageBanner> {
+    if (isSupabaseConfigured() && supabase) {
+      const payload = {
+        title: banner.title,
+        image_url: banner.imageUrl,
+        button_text: banner.buttonText,
+        button_link: banner.buttonLink,
+        priority: banner.priority,
+        active: banner.active,
+      };
+
+      if (banner.id && !banner.id.startsWith("banner_") && banner.id.length > 15) {
+        const { data, error } = await supabase
+          .from("homepage_banners")
+          .update(payload)
+          .eq("id", banner.id)
+          .select()
+          .single();
+        if (error) throw error;
+        return {
+          id: data.id,
+          title: data.title,
+          imageUrl: data.image_url,
+          buttonText: data.button_text,
+          buttonLink: data.button_link,
+          priority: data.priority,
+          active: data.active,
+        };
+      } else {
+        const { data, error } = await supabase
+          .from("homepage_banners")
+          .insert([payload])
+          .select()
+          .single();
+        if (error) throw error;
+        return {
+          id: data.id,
+          title: data.title,
+          imageUrl: data.image_url,
+          buttonText: data.button_text,
+          buttonLink: data.button_link,
+          priority: data.priority,
+          active: data.active,
+        };
+      }
+    } else {
+      const db = initMockDb();
+      if (!db.banners) db.banners = [];
+      const idx = db.banners.findIndex((b: any) => b.id === banner.id);
+      if (idx > -1) {
+        db.banners[idx] = banner;
+      } else {
+        db.banners.push(banner);
+      }
+      writeMockDb(db);
+      return banner;
+    }
+  },
+
+  async deleteBanner(id: string): Promise<boolean> {
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase.from("homepage_banners").delete().eq("id", id);
+      if (error) throw error;
+      return true;
+    } else {
+      const db = initMockDb();
+      if (!db.banners) return false;
+      const len = db.banners.length;
+      db.banners = db.banners.filter((b: any) => b.id !== id);
+      writeMockDb(db);
+      return db.banners.length < len;
+    }
+  },
+
+  // --- COUPONS ---
+  async getCoupons(): Promise<Coupon[]> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("coupons")
+        .select("*");
+      if (error) throw error;
+      return (data || []).map((c: any) => ({
+        id: c.id,
+        code: c.code,
+        discountType: c.discount_type,
+        discountValue: Number(c.discount_value),
+        minimumOrder: Number(c.minimum_order),
+        expiry: c.expiry ? new Date(c.expiry).toISOString().split("T")[0] : "",
+        usageLimit: c.usage_limit,
+        active: c.active,
+      }));
+    } else {
+      const db = initMockDb();
+      return db.coupons || [];
+    }
+  },
+
+  async saveCoupon(coupon: Coupon): Promise<Coupon> {
+    if (isSupabaseConfigured() && supabase) {
+      const payload = {
+        code: coupon.code,
+        discount_type: coupon.discountType,
+        discount_value: coupon.discountValue,
+        minimum_order: coupon.minimumOrder,
+        expiry: new Date(coupon.expiry).toISOString(),
+        usage_limit: coupon.usageLimit,
+        active: coupon.active,
+      };
+
+      if (coupon.id && !coupon.id.startsWith("coup_") && coupon.id.length > 15) {
+        const { data, error } = await supabase
+          .from("coupons")
+          .update(payload)
+          .eq("id", coupon.id)
+          .select()
+          .single();
+        if (error) throw error;
+        return {
+          id: data.id,
+          code: data.code,
+          discountType: data.discount_type,
+          discountValue: Number(data.discount_value),
+          minimumOrder: Number(data.minimum_order),
+          expiry: new Date(data.expiry).toISOString().split("T")[0],
+          usageLimit: data.usage_limit,
+          active: data.active,
+        };
+      } else {
+        const { data, error } = await supabase
+          .from("coupons")
+          .insert([payload])
+          .select()
+          .single();
+        if (error) throw error;
+        return {
+          id: data.id,
+          code: data.code,
+          discountType: data.discount_type,
+          discountValue: Number(data.discount_value),
+          minimumOrder: Number(data.minimum_order),
+          expiry: new Date(data.expiry).toISOString().split("T")[0],
+          usageLimit: data.usage_limit,
+          active: data.active,
+        };
+      }
+    } else {
+      const db = initMockDb();
+      if (!db.coupons) db.coupons = [];
+      const idx = db.coupons.findIndex((c: any) => c.id === coupon.id);
+      if (idx > -1) {
+        db.coupons[idx] = coupon;
+      } else {
+        db.coupons.push(coupon);
+      }
+      writeMockDb(db);
+      return coupon;
+    }
+  },
+
+  async deleteCoupon(id: string): Promise<boolean> {
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase.from("coupons").delete().eq("id", id);
+      if (error) throw error;
+      return true;
+    } else {
+      const db = initMockDb();
+      if (!db.coupons) return false;
+      const len = db.coupons.length;
+      db.coupons = db.coupons.filter((c: any) => c.id !== id);
+      writeMockDb(db);
+      return db.coupons.length < len;
+    }
+  },
+
+  // --- REVIEWS ---
+  async getReviews(): Promise<any[]> {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from("reviews")
+        .select("*, products(name)");
+      if (error) throw error;
+      return (data || []).map((r: any) => ({
+        id: r.id,
+        productId: r.product_id,
+        productName: r.products?.name || "Product",
+        customerName: "Anonymous Customer",
+        rating: r.rating,
+        review: r.review,
+        createdAt: new Date(r.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+        status: "approved",
+        reply: "",
+      }));
+    } else {
+      const db = initMockDb();
+      return db.reviews || [];
+    }
+  },
+
+  async deleteReview(id: string): Promise<boolean> {
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase.from("reviews").delete().eq("id", id);
+      if (error) throw error;
+      return true;
+    } else {
+      const db = initMockDb();
+      if (!db.reviews) return false;
+      const len = db.reviews.length;
+      db.reviews = db.reviews.filter((r: any) => r.id !== id);
+      writeMockDb(db);
+      return db.reviews.length < len;
     }
   }
 };

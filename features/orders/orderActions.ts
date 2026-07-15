@@ -89,6 +89,15 @@ export async function getUnreadNotificationsCount() {
 }
 
 // --- USER PROFILE & ADDRESSES ---
+export async function fetchCustomers(): Promise<any[]> {
+  try {
+    return await dbService.getProfiles();
+  } catch (err) {
+    console.error("Failed to fetch customers", err);
+    return [];
+  }
+}
+
 export async function updateProfile(userId: string, fullName: string, phone: string, avatarUrl?: string) {
   try {
     const profile = await dbService.updateProfile(userId, fullName, phone, avatarUrl);

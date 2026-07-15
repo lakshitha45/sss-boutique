@@ -1,42 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { HomepageBanner } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Edit2, Trash2, ArrowUp, ArrowDown, Eye, X, Image as ImageIcon, Sparkles } from "lucide-react";
-
-const DEFAULT_BANNERS: HomepageBanner[] = [
-  {
-    id: "banner_1",
-    title: "Summer Handlooms & Chiffons Collection",
-    imageUrl: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=1200&auto=format&fit=crop",
-    buttonText: "Browse Collection",
-    buttonLink: "/shop?category=sarees",
-    priority: 1,
-    active: true,
-  },
-  {
-    id: "banner_2",
-    title: "Exclusive Silk Sarees Festival - Up to 50% Off",
-    imageUrl: "https://images.unsplash.com/photo-1610030469983-98e550d6193c?q=80&w=1200&auto=format&fit=crop",
-    buttonText: "Shop the Sale",
-    buttonLink: "/shop?featured=true",
-    priority: 2,
-    active: true,
-  },
-  {
-    id: "banner_3",
-    title: "Elegant Cotton Kurtis & Accessories",
-    imageUrl: "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?q=80&w=1200&auto=format&fit=crop",
-    buttonText: "New Arrivals",
-    buttonLink: "/shop?category=kurtis",
-    priority: 3,
-    active: false,
-  },
-];
+import { fetchBanners, saveBanner, deleteBanner } from "@/features/products/productActions";
 
 export default function BannersPage() {
-  const [banners, setBanners] = useState<HomepageBanner[]>(DEFAULT_BANNERS);
+  const [banners, setBanners] = useState<HomepageBanner[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBanner, setEditingBanner] = useState<HomepageBanner | null>(null);
   const [previewBanner, setPreviewBanner] = useState<HomepageBanner | null>(null);
@@ -48,6 +20,21 @@ export default function BannersPage() {
   const [buttonLink, setButtonLink] = useState("");
   const [priority, setPriority] = useState(1);
   const [active, setActive] = useState(true);
+
+  const loadData = async () => {
+    try {
+      const data = await fetchBanners();
+      setBanners(data);
+    } catch (err) {
+      console.error("Failed to load banners", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const openAddModal = () => {
     setEditingBanner(null);
@@ -71,322 +58,319 @@ export default function BannersPage() {
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !imageUrl) {
       alert("Title and Image URL are required");
       return;
     }
 
-    if (editingBanner) {
-      setBanners((prev) =>
-        prev.map((b) =>
-          b.id === editingBanner.id
-            ? { ...b, title, imageUrl, buttonText, buttonLink, priority, active }
-            : b
-        ).sort((a, b) => a.priority - b.priority)
-      );
-    } else {
-      const newBanner: HomepageBanner = {
-        id: `banner_${Date.now()}`,
-        title,
-        imageUrl,
-        buttonText,
-        buttonLink,
-        priority,
-        active,
-      };
-      setBanners((prev) => [...prev, newBanner].sort((a, b) => a.priority - b.priority));
+    const payload = {
+      id: editingBanner ? editingBanner.id : `banner_temp_${Date.now()}`,
+      title,
+      imageUrl,
+      buttonText,
+      buttonLink,
+      priority,
+      active,
+    };
+
+    try {
+      const res = await saveBanner(payload);
+      if (res.success) {
+        setIsModalOpen(false);
+        loadData();
+      } else {
+        alert(res.error || "Failed to save banner");
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to save banner");
     }
-    setIsModalOpen(false);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm("Remove this promotional banner?")) return;
-    setBanners((prev) => prev.filter((b) => b.id !== id));
+    try {
+      const res = await deleteBanner(id);
+      if (res.success) {
+        loadData();
+      } else {
+        alert(res.error || "Failed to delete banner");
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to delete banner");
+    }
   };
 
-  const movePriority = (index: number, direction: "up" | "down") => {
+  const movePriority = async (index: number, direction: "up" | "down") => {
     const targetIdx = direction === "up" ? index - 1 : index + 1;
     if (targetIdx < 0 || targetIdx >= banners.length) return;
 
     const list = [...banners];
-    const tempPriority = list[index].priority;
+    const temp = list[index].priority;
     list[index].priority = list[targetIdx].priority;
-    list[targetIdx].priority = tempPriority;
+    list[targetIdx].priority = temp;
 
-    const sorted = list.sort((a, b) => a.priority - b.priority);
-    setBanners(sorted);
+    // Save priorities in sequence
+    try {
+      await Promise.all([
+        saveBanner(list[index]),
+        saveBanner(list[targetIdx])
+      ]);
+      loadData();
+    } catch (err) {
+      console.error("Failed to reorder banners", err);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="h-[60vh] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 font-poppins text-zinc-100 bg-[#0A0A0A]">
-      <div className="flex justify-between items-end">
+      <div className="flex justify-between items-end border-b border-[#1C1C1C] pb-5">
         <div className="space-y-1">
           <span className="text-[10px] text-accent font-bold uppercase tracking-[0.2em]">Content Management</span>
-          <h1 className="font-serif text-3xl font-light tracking-wide text-white">Homepage Banners</h1>
-          <div className="w-12 h-[1px] bg-accent mt-3" />
+          <h1 className="font-serif text-3xl font-light tracking-wide text-white">Promotional Banners</h1>
         </div>
         <button
           onClick={openAddModal}
-          className="flex items-center space-x-2 bg-accent text-foreground px-4 py-2.5 font-bold uppercase tracking-wider text-[10px] hover:bg-accent/90 transition shadow-luxury"
+          className="flex items-center space-x-2 bg-accent text-black font-semibold text-xs px-4 py-2.5 hover:bg-[#c39665] transition rounded-none uppercase tracking-wider"
         >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Schedule Banner</span>
+          <Plus className="w-4 h-4" />
+          <span>Add Banner</span>
         </button>
       </div>
 
-      {/* CARDS LIST */}
-      <div className="grid grid-cols-1 gap-6">
-        {banners.map((b, index) => (
-          <div
-            key={b.id}
-            className="bg-[#121212] border border-[#1C1C1C] flex flex-col md:flex-row hover:border-zinc-700 transition duration-300 relative group overflow-hidden"
-          >
-            {/* Banner preview thumbnail */}
-            <div className="w-full md:w-80 h-44 bg-zinc-900 relative overflow-hidden flex-shrink-0">
-              <img src={b.imageUrl} alt="" className="object-cover w-full h-full opacity-60" />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#121212] via-transparent to-transparent hidden md:block" />
-              
-              <div className="absolute top-4 left-4 flex space-x-2 text-[9px] uppercase tracking-widest font-bold">
-                <span className={`px-2 py-0.5 border backdrop-blur-sm ${
-                  b.active
-                    ? "bg-emerald-950/20 text-emerald-400 border-emerald-900/35"
-                    : "bg-zinc-800/40 text-zinc-500 border-zinc-700/35"
-                }`}>
-                  {b.active ? "Active" : "Inactive"}
-                </span>
-                
-                <span className="bg-[#0A0A0A]/40 text-zinc-300 border border-zinc-700/30 px-2 py-0.5 backdrop-blur-sm">
+      {banners.length === 0 ? (
+        <div className="bg-[#121212] border border-[#1C1C1C] p-12 text-center text-zinc-500 font-light text-xs">
+          No banners found. Click "Add Banner" to upload promotional content.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {banners.map((b, index) => (
+            <motion.div
+              key={b.id}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+              className="bg-[#121212] border border-[#1C1C1C] overflow-hidden flex flex-col group"
+            >
+              {/* Image Preview */}
+              <div className="h-44 bg-[#080808] relative overflow-hidden flex items-center justify-center border-b border-[#1C1C1C]">
+                {b.imageUrl ? (
+                  <img src={b.imageUrl} alt={b.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                ) : (
+                  <ImageIcon className="w-8 h-8 text-zinc-650" />
+                )}
+                <div className="absolute top-3 left-3 bg-[#0A0A0A]/85 border border-[#1F1F1F] px-2 py-0.5 text-[9px] font-bold text-zinc-400">
                   Priority {b.priority}
-                </span>
+                </div>
+                {b.active ? (
+                  <div className="absolute top-3 right-3 bg-emerald-950/85 border border-emerald-900/40 px-2 py-0.5 text-[9px] font-bold text-emerald-400">
+                    Active
+                  </div>
+                ) : (
+                  <div className="absolute top-3 right-3 bg-zinc-800/85 border border-zinc-700/40 px-2 py-0.5 text-[9px] font-bold text-zinc-500">
+                    Inactive
+                  </div>
+                )}
               </div>
-            </div>
 
-            {/* Info details */}
-            <div className="p-6 flex-1 flex flex-col justify-between space-y-4 md:space-y-0">
-              <div className="space-y-2">
-                <h3 className="font-serif text-lg font-light text-white tracking-wide leading-tight">{b.title}</h3>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-zinc-500 font-mono">
-                  <span>Action: {b.buttonText}</span>
-                  <span>Link: {b.buttonLink}</span>
+              {/* Title & Link */}
+              <div className="p-4 flex-grow space-y-3">
+                <h3 className="font-serif text-sm font-medium text-white group-hover:text-accent transition leading-snug line-clamp-2">
+                  {b.title}
+                </h3>
+                <div className="space-y-1 text-[11px] text-zinc-400 leading-normal">
+                  <p>CTA: <span className="text-zinc-200 font-mono font-medium">{b.buttonText || "None"}</span></p>
+                  <p>Link: <span className="text-zinc-500 truncate font-mono block max-w-full">{b.buttonLink || "None"}</span></p>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between border-t border-[#1C1C1C]/60 pt-4 mt-2">
-                {/* Priority arrow toggles */}
-                <div className="flex items-center space-x-1 border border-[#1C1C1C] bg-[#0C0C0C]">
+              {/* Action Toolbar */}
+              <div className="px-4 py-3 bg-[#0C0C0C] border-t border-[#1C1C1C] flex items-center justify-between">
+                <div className="flex space-x-1.5">
                   <button
                     disabled={index === 0}
                     onClick={() => movePriority(index, "up")}
-                    className="p-2 hover:text-accent disabled:text-zinc-700 transition"
-                    title="Move Up"
+                    className="p-1.5 bg-[#121212] border border-[#1F1F1F] text-zinc-400 hover:text-white disabled:opacity-40 disabled:pointer-events-none"
                   >
                     <ArrowUp className="w-3.5 h-3.5" />
                   </button>
-                  <div className="w-[1px] h-4 bg-[#1C1C1C]" />
                   <button
                     disabled={index === banners.length - 1}
                     onClick={() => movePriority(index, "down")}
-                    className="p-2 hover:text-accent disabled:text-zinc-700 transition"
-                    title="Move Down"
+                    className="p-1.5 bg-[#121212] border border-[#1F1F1F] text-zinc-400 hover:text-white disabled:opacity-40 disabled:pointer-events-none"
                   >
                     <ArrowDown className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                <div className="flex space-x-2 text-xs">
+                <div className="flex space-x-2">
                   <button
                     onClick={() => setPreviewBanner(b)}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 hover:text-accent transition border border-[#1C1C1C] hover:border-accent bg-[#0C0C0C]"
+                    className="p-1.5 text-zinc-400 hover:text-accent transition"
+                    title="Live Preview"
                   >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>Preview</span>
+                    <Eye className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => openEditModal(b)}
-                    className="p-2 hover:text-accent transition border border-[#1C1C1C] hover:border-accent bg-[#0C0C0C]"
-                    title="Edit Banner"
+                    className="p-1.5 text-zinc-400 hover:text-white transition"
                   >
-                    <Edit2 className="w-3.5 h-3.5" />
+                    <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(b.id)}
-                    className="p-2 hover:text-rose-450 transition border border-[#1C1C1C] hover:border-rose-900 bg-[#0C0C0C]"
-                    title="Remove Banner"
+                    className="p-1.5 text-zinc-500 hover:text-error transition"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* FULL-WIDTH BANNER PREVIEW MODAL */}
-      <AnimatePresence>
-        {previewBanner && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/80 backdrop-blur-sm"
-              onClick={() => setPreviewBanner(null)}
-            />
-            
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-5xl bg-[#121212] border border-[#1C1C1C] relative z-10 shadow-2xl overflow-hidden"
-            >
-              <button
-                onClick={() => setPreviewBanner(null)}
-                className="absolute top-4 right-4 z-20 p-2 bg-[#0A0A0A]/60 hover:bg-[#0A0A0A] border border-zinc-800 text-white rounded-none transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              <div className="h-[350px] relative flex items-center px-12 md:px-20 text-white bg-zinc-950">
-                <img
-                  src={previewBanner.imageUrl}
-                  alt=""
-                  className="absolute inset-0 object-cover w-full h-full opacity-40 select-none pointer-events-none"
-                />
-                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
-                
-                <div className="relative max-w-xl space-y-5 text-left">
-                  <span className="text-[10px] text-accent font-bold uppercase tracking-[0.25em] flex items-center space-x-2">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Exclusive Preview</span>
-                  </span>
-                  <h2 className="font-serif text-3xl md:text-4xl font-light tracking-wide leading-tight">
-                    {previewBanner.title}
-                  </h2>
-                  <button className="bg-white hover:bg-zinc-100 text-black px-6 py-3 font-semibold text-[10px] uppercase tracking-widest transition duration-300">
-                    {previewBanner.buttonText}
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+          ))}
+        </div>
+      )}
 
-      {/* ADD/EDIT MODAL */}
+      {/* EDIT MODAL */}
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 backdrop-blur-xs">
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/70 backdrop-blur-sm"
-              onClick={() => setIsModalOpen(false)}
-            />
-            
-            <motion.div
-              initial={{ opacity: 0, y: 30, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 30, scale: 0.95 }}
-              className="bg-[#121212] border border-[#1C1C1C] max-w-md w-full relative z-10 shadow-2xl p-6 overflow-y-auto max-h-[90vh]"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#121212] border border-[#1F1F1F] p-6 max-w-md w-full text-xs font-poppins space-y-5"
             >
-              <h2 className="font-serif text-xl font-light text-white mb-6 tracking-wide">
-                {editingBanner ? "Edit Promotional Banner" : "Schedule New Banner"}
-              </h2>
+              <div className="flex justify-between items-center border-b border-[#1F1F1F] pb-3">
+                <span className="font-serif text-sm font-semibold tracking-wide text-white">
+                  {editingBanner ? "Modify Banner" : "New Promotional Banner"}
+                </span>
+                <button onClick={() => setIsModalOpen(false)} className="text-zinc-500 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
-              <form onSubmit={handleSave} className="space-y-4 text-xs">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Banner Headline</label>
+              <form onSubmit={handleSave} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">Banner Title / Hook</label>
                   <input
                     type="text"
+                    required
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="w-full bg-[#0A0A0A] border border-[#1C1C1C] rounded-none px-3 py-2.5 focus:outline-none focus:border-accent text-white"
-                    placeholder="e.g. SSS Festive Collection Launch"
+                    className="w-full bg-[#0A0A0A] border border-[#1F1F1F] px-3 py-2 focus:outline-none focus:border-accent text-white"
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Image URL</label>
+                <div className="space-y-1">
+                  <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">Image URL</label>
                   <input
-                    type="text"
+                    type="url"
+                    required
                     value={imageUrl}
                     onChange={(e) => setImageUrl(e.target.value)}
-                    className="w-full bg-[#0A0A0A] border border-[#1C1C1C] rounded-none px-3 py-2.5 focus:outline-none focus:border-accent text-white"
-                    placeholder="Spreadsheet image link or R2 storage URL..."
+                    placeholder="https://unsplash.com/..."
+                    className="w-full bg-[#0A0A0A] border border-[#1F1F1F] px-3 py-2 focus:outline-none focus:border-accent text-white"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Button CTA Text</label>
+                  <div className="space-y-1">
+                    <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">Button Text</label>
                     <input
                       type="text"
                       value={buttonText}
                       onChange={(e) => setButtonText(e.target.value)}
-                      className="w-full bg-[#0A0A0A] border border-[#1C1C1C] rounded-none px-3 py-2.5 focus:outline-none focus:border-accent text-white"
-                      placeholder="e.g. Browse Now"
+                      className="w-full bg-[#0A0A0A] border border-[#1F1F1F] px-3 py-2 focus:outline-none focus:border-accent text-white"
                     />
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">CTA Link URL</label>
+                  <div className="space-y-1">
+                    <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">Button Link</label>
                     <input
                       type="text"
                       value={buttonLink}
                       onChange={(e) => setButtonLink(e.target.value)}
-                      className="w-full bg-[#0A0A0A] border border-[#1C1C1C] rounded-none px-3 py-2.5 focus:outline-none focus:border-accent text-white"
-                      placeholder="e.g. /shop?category=sarees"
+                      className="w-full bg-[#0A0A0A] border border-[#1F1F1F] px-3 py-2 focus:outline-none focus:border-accent text-white"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 items-center">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Display Priority</label>
+                  <div className="space-y-1">
+                    <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">Sequence Priority</label>
                     <input
                       type="number"
+                      required
                       min={1}
                       value={priority}
                       onChange={(e) => setPriority(parseInt(e.target.value) || 1)}
-                      className="w-full bg-[#0A0A0A] border border-[#1C1C1C] rounded-none px-3 py-2.5 focus:outline-none focus:border-accent text-white"
+                      className="w-full bg-[#0A0A0A] border border-[#1F1F1F] px-3 py-2 focus:outline-none focus:border-accent text-white"
                     />
                   </div>
-
-                  <div className="flex items-center space-x-3 pt-6">
-                    <input
-                      type="checkbox"
-                      id="activeBanner"
-                      checked={active}
-                      onChange={(e) => setActive(e.target.checked)}
-                      className="accent-accent w-4 h-4 bg-[#0A0A0A] border border-[#1C1C1C]"
-                    />
-                    <label htmlFor="activeBanner" className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider select-none cursor-pointer">
-                      Publish Active
-                    </label>
+                  <div className="flex items-center space-x-3 mt-4 justify-end">
+                    <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">Status Active</span>
+                    <button
+                      type="button"
+                      onClick={() => setActive(!active)}
+                      className={`relative w-8 h-4 transition duration-200 rounded-full ${active ? "bg-accent" : "bg-zinc-800"}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${active ? "translate-x-4" : ""}`} />
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex space-x-3 border-t border-[#1C1C1C] pt-5 mt-6 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2.5 border border-[#1C1C1C] hover:bg-zinc-900 transition text-[10px] uppercase font-bold tracking-wider"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2.5 bg-accent text-foreground hover:bg-accent/90 transition text-[10px] uppercase font-bold tracking-wider"
-                  >
-                    Save Banner
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-accent text-black font-semibold uppercase tracking-wider py-2.5 hover:bg-[#c39665] transition mt-2 rounded-none"
+                >
+                  Save Settings
+                </button>
               </form>
             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* FULL WIDTH PREVIEW DRAWER */}
+      <AnimatePresence>
+        {previewBanner && (
+          <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50">
+            <div className="max-w-5xl w-full space-y-4">
+              <div className="flex justify-between items-center text-zinc-400 text-xs">
+                <span>Promotional Banner Live Preview (Mockup Layout)</span>
+                <button onClick={() => setPreviewBanner(null)} className="text-zinc-500 hover:text-white flex items-center space-x-1">
+                  <X className="w-4.5 h-4.5" />
+                  <span>Close Preview</span>
+                </button>
+              </div>
+              <div className="w-full aspect-[21/9] bg-[#0A0A0A] relative flex items-center border border-[#1F1F1F]">
+                <img src={previewBanner.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-75" />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/45 to-transparent" />
+                <div className="relative pl-12 sm:pl-20 max-w-xl space-y-6">
+                  <span className="text-[10px] text-accent font-bold uppercase tracking-widest flex items-center space-x-2">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Exclusive Showcase</span>
+                  </span>
+                  <h2 className="font-serif text-3xl sm:text-5xl font-light tracking-wide text-white leading-tight">
+                    {previewBanner.title}
+                  </h2>
+                  <a
+                    href={previewBanner.buttonLink}
+                    className="inline-block bg-white text-black font-semibold text-[10px] uppercase tracking-widest px-6 py-3 hover:bg-accent hover:text-white transition duration-300 rounded-none"
+                  >
+                    {previewBanner.buttonText || "Shop Now"}
+                  </a>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </AnimatePresence>

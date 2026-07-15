@@ -416,3 +416,68 @@ export async function deleteCategory(id: string): Promise<{ success: boolean; er
   }
 }
 
+// --- ADMIN BANNERS, COUPONS & REVIEWS ACTIONS ---
+export async function fetchBanners() {
+  return await dbService.getBanners();
+}
+
+export async function saveBanner(banner: any) {
+  try {
+    const saved = await dbService.saveBanner(banner);
+    revalidatePath("/admin/banners");
+    revalidatePath("/");
+    return { success: true, banner: saved };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteBanner(id: string) {
+  try {
+    await dbService.deleteBanner(id);
+    revalidatePath("/admin/banners");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchCoupons() {
+  return await dbService.getCoupons();
+}
+
+export async function saveCoupon(coupon: any) {
+  try {
+    const saved = await dbService.saveCoupon(coupon);
+    revalidatePath("/admin/coupons");
+    return { success: true, coupon: saved };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteCoupon(id: string) {
+  try {
+    await dbService.deleteCoupon(id);
+    revalidatePath("/admin/coupons");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchReviews() {
+  return await dbService.getReviews();
+}
+
+export async function deleteReview(id: string) {
+  try {
+    await dbService.deleteReview(id);
+    revalidatePath("/admin/reviews");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+

@@ -252,67 +252,11 @@
       "sku": "MONA-TOTE-BG-03-ONE SIZE"
     }
   ],
-  "orders": [
-    {
-      "customerName": "Actionhood AI",
-      "customerEmail": "actionhood.ai@gmail.com",
-      "subtotal": 850,
-      "discount": 0,
-      "shipping": 0,
-      "tax": 0,
-      "grandTotal": 850,
-      "shippingAddress": {
-        "fullName": "Actionhood AI",
-        "addressLine1": "Salem",
-        "city": "Salem",
-        "state": "TN",
-        "postalCode": "636008",
-        "country": "India",
-        "phone": "6379211810"
-      },
-      "items": [
-        {
-          "productId": "prod_2",
-          "productName": "Seraphina Cashmere Coat",
-          "productImage": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=800&auto=format&fit=crop",
-          "quantity": 1,
-          "price": 850,
-          "variantSize": "S",
-          "id": "ord_item_1784020136291_0",
-          "orderId": "ord_1784020136291"
-        }
-      ],
-      "trackingNumber": "SSS-DELHIVERY-258374",
-      "id": "ord_1784020136291",
-      "orderNumber": "SSS-ORD-136289-1559",
-      "paymentStatus": "pending",
-      "orderStatus": "pending",
-      "createdAt": "2026-07-14T09:08:56.291Z"
-    }
-  ],
-  "users": [
-    {
-      "id": "admin_1",
-      "email": "admin@sssboutique.com",
-      "fullName": "Boutique Owner",
-      "role": "admin",
-      "createdAt": "2026-07-14T07:45:35.329Z"
-    },
-    {
-      "email": "actionhood.ai@gmail.com",
-      "fullName": "Actionhood.ai",
-      "role": "customer",
-      "id": "usr_1784020166284",
-      "createdAt": "2026-07-14T09:09:26.284Z"
-    }
-  ],
-  "activity_logs": [
-    {
-      "id": "log_1",
-      "userId": "admin_1",
-      "action": "Imported CSV",
-      "details": "Seeded initial luxury products catalog",
-      "createdAt": "2026-07-14T07:45:35.329Z"
-    }
-  ]
+  "orders": [],
+  "users": [],
+  "activity_logs": [],
+  "shipments": [],
+  "banners": [],
+  "coupons": [],
+  "reviews": []
 }
