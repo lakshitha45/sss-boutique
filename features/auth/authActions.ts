@@ -9,46 +9,59 @@ import { UserProfile } from "@/types";
 const SESSION_COOKIE_NAME = "sss_boutique_session";
 
 export async function getCurrentUser(): Promise<UserProfile | null> {
+  // 1. Try to read from the session cookie first (keeps user logged in on F5 refresh!)
+  const cookieStore = await cookies();
+  const session = cookieStore.get(SESSION_COOKIE_NAME);
+  if (session?.value) {
+    try {
+      return JSON.parse(session.value) as UserProfile;
+    } catch { /* skip and check supabase fallback */ }
+  }
+
+  // 2. Fallback to Supabase session directly (if configured)
   if (isSupabaseConfigured() && supabase) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
 
-    // Get role and details from profiles table if exists, else return default customer
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .maybeSingle();
+      // Get profile details
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
 
-    if (profile) {
-      return {
+      const userProfile: UserProfile = profile ? {
         id: profile.id,
         email: profile.email,
         fullName: profile.full_name,
         phone: profile.phone,
         role: profile.role || "customer",
         createdAt: profile.created_at,
+      } : {
+        id: user.id,
+        email: user.email || "",
+        fullName: user.user_metadata?.full_name || "Customer",
+        role: (user.user_metadata?.role as "admin" | "customer") || "customer",
+        createdAt: user.created_at,
       };
-    }
 
-    return {
-      id: user.id,
-      email: user.email || "",
-      fullName: user.user_metadata?.full_name || "Customer",
-      role: (user.user_metadata?.role as "admin" | "customer") || "customer",
-      createdAt: user.created_at,
-    };
-  } else {
-    // Mock Mode: read from cookie
-    const cookieStore = await cookies();
-    const session = cookieStore.get(SESSION_COOKIE_NAME);
-    if (!session?.value) return null;
-    try {
-      return JSON.parse(session.value) as UserProfile;
-    } catch {
+      // Set cookie to persist it
+      cookieStore.set(SESSION_COOKIE_NAME, JSON.stringify(userProfile), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7, // 1 week
+      });
+
+      return userProfile;
+    } catch (err) {
+      console.error("Supabase auth check failed:", err);
       return null;
     }
   }
+
+  return null;
 }
 
 export async function login(email: string, password?: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
