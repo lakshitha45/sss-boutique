@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { fetchOrders, changeOrderStatus, getExportCsv } from "@/features/orders/orderActions";
+import { createNewShipment } from "@/features/shipments/shipmentActions";
 import { Order } from "@/types";
 import { formatPrice } from "@/utils";
 import { motion as m, AnimatePresence } from "framer-motion";
@@ -55,6 +56,11 @@ export default function OrderManagementPage() {
   
   // Selected Courier state
   const [selectedCouriers, setSelectedCouriers] = useState<Record<string, string>>({});
+
+  // Shipment Confirmation Dialog State
+  const [shippingOrderId, setShippingOrderId] = useState<string | null>(null);
+  const [shipCourier, setShipCourier] = useState("Delhivery");
+  const [shipTracking, setShipTracking] = useState("");
   
   // Modal / Print / Details state
   const [invoiceOrder, setInvoiceOrder] = useState<Order | null>(null);
@@ -83,6 +89,20 @@ export default function OrderManagementPage() {
   }, []);
 
   const handleStatusChange = async (id: string, status: string) => {
+    if (status === "Shipped") {
+      const order = orders.find((o) => o.id === id);
+      if (order && order.trackingNumber) {
+        if (!confirm(`Are you sure you want to transition this order to Shipped? Tracking ID ${order.trackingNumber} is already assigned.`)) {
+          return;
+        }
+      } else {
+        setShippingOrderId(id);
+        setShipCourier(selectedCouriers[id] || "Delhivery");
+        setShipTracking("");
+        return;
+      }
+    }
+
     try {
       const res = await changeOrderStatus(id, status, undefined, "admin");
       if (res.success) {
@@ -98,10 +118,48 @@ export default function OrderManagementPage() {
     }
   };
 
+  const handleConfirmShipment = async () => {
+    if (!shippingOrderId) return;
+    if (!shipTracking.trim()) {
+      alert("Please enter a Tracking ID / Waybill number to confirm shipment.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await createNewShipment({
+        orderId: shippingOrderId,
+        courierName: shipCourier,
+        trackingNumber: shipTracking.trim(),
+        status: "Shipped",
+      });
+
+      if (res.success) {
+        setShippingOrderId(null);
+        loadOrdersData();
+        alert("Shipment confirmed! The customer has been notified by email.");
+      } else {
+        alert(res.error || "Failed to create shipment.");
+      }
+    } catch (e: any) {
+      alert(e.message || "An error occurred while confirming shipment.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSaveTracking = async (id: string, currentStatus: string) => {
     try {
+      const courierName = selectedCouriers[id] || "Delhivery";
       const res = await changeOrderStatus(id, currentStatus, tempTracking, "admin");
       if (res.success) {
+        await createNewShipment({
+          orderId: id,
+          courierName: courierName,
+          trackingNumber: tempTracking.trim(),
+          status: currentStatus === "Shipped" || currentStatus === "Delivered" ? currentStatus : "Packed"
+        });
+
         setEditingTrackingId(null);
         if (selectedOrderDetails?.id === id && res.order) {
           setSelectedOrderDetails(res.order);
@@ -689,6 +747,74 @@ export default function OrderManagementPage() {
                     </button>
                   </div>
                 )}
+              </div>
+            </m.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* CONFIRM SHIPMENT MODAL POPUP */}
+      <AnimatePresence>
+        {shippingOrderId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+            <m.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#121212] border border-[#1F1F1F] w-full max-w-sm p-6 font-poppins text-zinc-100 space-y-6 relative"
+            >
+              <button 
+                onClick={() => setShippingOrderId(null)} 
+                className="absolute top-4 right-4 text-zinc-500 hover:text-white transition"
+                aria-label="Close modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="border-b border-[#1C1C1C] pb-3">
+                <span className="text-[9px] text-accent font-bold uppercase tracking-widest block">Dispatch Logistics</span>
+                <h3 className="font-serif text-lg font-light text-white tracking-wide mt-1">Confirm Order Shipment</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Courier Partner</label>
+                  <select
+                    value={shipCourier}
+                    onChange={(e) => setShipCourier(e.target.value)}
+                    className="w-full bg-[#0A0A0A] border border-[#1C1C1C] px-3 py-2.5 focus:outline-none focus:border-accent text-white text-xs"
+                  >
+                    {COURIERS_LIST.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Tracking ID / Waybill Number</label>
+                  <input
+                    type="text"
+                    value={shipTracking}
+                    onChange={(e) => setShipTracking(e.target.value)}
+                    placeholder="Enter courier tracking ID..."
+                    className="w-full bg-[#0A0A0A] border border-[#1C1C1C] px-3 py-2.5 focus:outline-none focus:border-accent text-white text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-3 border-t border-[#1C1C1C]">
+                <button
+                  onClick={() => setShippingOrderId(null)}
+                  className="px-4 py-2 border border-[#1C1C1C] hover:bg-[#1A1A1A] text-[10px] font-bold uppercase tracking-widest transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmShipment}
+                  className="px-4 py-2 bg-accent hover:bg-accent/90 text-black font-bold uppercase tracking-widest text-[10px] transition"
+                >
+                  Confirm Shipment
+                </button>
               </div>
             </m.div>
           </div>

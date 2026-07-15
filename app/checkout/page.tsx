@@ -144,7 +144,7 @@ export default function CheckoutPage() {
           price: item.product?.price || 0,
           variantSize: item.size,
         })),
-        trackingNumber: `SSS-DELHIVERY-${Math.floor(100000 + Math.random() * 900000)}`,
+        trackingNumber: undefined,
         orderNotes: data.orderNotes || undefined,
       };
 
