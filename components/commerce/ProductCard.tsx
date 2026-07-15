@@ -8,6 +8,7 @@ import type { Product } from "@/types";
 import { PriceTag } from "@/components/ui/PriceTag";
 import { Badge } from "@/components/ui/Badge";
 import { WishlistButton } from "@/components/commerce/WishlistButton";
+import { getDisplayPrice } from "@/utils";
 
 export interface ProductCardProps {
   product: Product;
@@ -34,7 +35,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   className = "",
 }) => {
   const imageUrl = product.images?.[0]?.imageUrl || FALLBACK_IMAGE;
-  const hasDiscount = !!product.compareAtPrice && product.compareAtPrice > product.price;
+  const displayPrice = getDisplayPrice(product);
+  const displayCompareAtPrice = product.compareAtPrice
+    ? getDisplayPrice({ price: product.compareAtPrice, taxInclusive: product.taxInclusive })
+    : undefined;
+  const hasDiscount = !!displayCompareAtPrice && displayCompareAtPrice > displayPrice;
   const isOutOfStock = product.inventory === 0 || product.stock === 0;
 
   // ── Minimal Variant (Homepage hero cards) ────────────────────────
@@ -71,8 +76,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </Link>
           </h3>
           <PriceTag
-            price={product.price}
-            compareAtPrice={product.compareAtPrice}
+            price={displayPrice}
+            compareAtPrice={displayCompareAtPrice}
             size="sm"
             className="justify-center"
           />
@@ -100,7 +105,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {/* Discount Badge */}
           {hasDiscount && (
             <Badge variant="discount" className="absolute top-3 left-3">
-              -{Math.round(((product.compareAtPrice! - product.price) / product.compareAtPrice!) * 100)}%
+              -{Math.round(((displayCompareAtPrice! - displayPrice) / displayCompareAtPrice!) * 100)}%
             </Badge>
           )}
 
@@ -155,8 +160,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </Link>
           </h3>
           <PriceTag
-            price={product.price}
-            compareAtPrice={product.compareAtPrice}
+            price={displayPrice}
+            compareAtPrice={displayCompareAtPrice}
             size="sm"
           />
         </div>

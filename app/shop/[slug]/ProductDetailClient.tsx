@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Product } from "@/types";
 import { useCart } from "@/features/cart/CartContext";
-import { formatPrice } from "@/utils";
+import { formatPrice, getDisplayPrice } from "@/utils";
 import { Plus, Minus, ShieldCheck, Truck, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -178,8 +178,8 @@ export default function ProductDetailClient({ product, categoryName, allProducts
           </h1>
           
           <PriceTag
-            price={product.price}
-            compareAtPrice={product.compareAtPrice}
+            price={getDisplayPrice(product)}
+            compareAtPrice={product.compareAtPrice ? getDisplayPrice({ price: product.compareAtPrice, taxInclusive: product.taxInclusive }) : undefined}
             size="lg"
             className="mt-3"
           />
@@ -426,7 +426,7 @@ export default function ProductDetailClient({ product, categoryName, allProducts
                   <h3 className="font-serif text-xs font-semibold text-zinc-700 group-hover:text-primary truncate transition-colors">
                     {prod.name}
                   </h3>
-                  <span className="font-bold text-zinc-900 block">{formatPrice(prod.price)}</span>
+                  <span className="font-bold text-zinc-900 block">{formatPrice(getDisplayPrice(prod))}</span>
                 </div>
               </Link>
             ))}

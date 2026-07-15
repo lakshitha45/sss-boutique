@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Product, Category } from "@/types";
 import { fetchProducts, fetchCategories } from "@/features/products/productActions";
-import { formatPrice } from "@/utils";
+import { formatPrice, getDisplayPrice } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, Command, Flame, History, ArrowRight } from "lucide-react";
 
@@ -298,7 +298,7 @@ export const SearchPalette: React.FC = () => {
                         </div>
                       </div>
                       <span className="font-semibold text-right flex-shrink-0 font-poppins text-foreground">
-                        {formatPrice(prod.price)}
+                        {formatPrice(getDisplayPrice(prod))}
                       </span>
                     </button>
                   ))}

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useCart } from "@/features/cart/CartContext";
 import { useAuth } from "@/features/auth/AuthContext";
 import { placeOrder } from "@/features/orders/orderActions";
-import { formatPrice } from "@/utils";
+import { formatPrice, getDisplayPrice } from "@/utils";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Link from "next/link";
@@ -388,7 +388,7 @@ export default function CheckoutPage() {
                   fullWidth
                   size="lg"
                 >
-                  {loading ? "Authorizing Security Check..." : `Authorize Payment of ${formatPrice(cartTotal)}`}
+                  {loading ? "Authorizing Security Check..." : `Authorize Payment of ${formatPrice(grandTotal)}`}
                 </Button>
               </form>
 
@@ -415,7 +415,7 @@ export default function CheckoutPage() {
                         <p className="text-zinc-500 font-light font-poppins">Qty: {item.quantity}</p>
                       </div>
                       <PriceTag
-                        price={(item.product?.price || 0) * item.quantity}
+                        price={getDisplayPrice(item.product) * item.quantity}
                         size="sm"
                       />
                     </div>

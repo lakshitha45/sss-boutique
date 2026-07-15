@@ -2,7 +2,7 @@
 
 import React, { useRef, useEffect } from "react";
 import { useCart } from "@/features/cart/CartContext";
-import { formatPrice } from "@/utils";
+import { formatPrice, getDisplayPrice } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
@@ -126,7 +126,7 @@ export const CartDrawer: React.FC = () => {
                         )}
 
                         <span className="font-poppins text-xs font-semibold mt-1.5 block">
-                          {formatPrice(item.product?.price || 0)}
+                          {formatPrice(getDisplayPrice(item.product))}
                         </span>
                       </div>
 

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { formatPrice } from "@/utils";
+import { formatPrice, getDisplayPrice } from "@/utils";
 import { Product, Category } from "@/types";
 import { fetchProducts, fetchCategories } from "@/features/products/productActions";
 import { useCart } from "@/features/cart/CartContext";
@@ -236,7 +236,7 @@ export default function HomePage() {
                         <div className="pt-3 space-y-1 text-center">
                           <span className="text-[9px] text-zinc-400 tracking-widest uppercase block">{catName}</span>
                           <h3 className="font-serif text-sm font-light tracking-wide text-foreground truncate">{prod.name}</h3>
-                          <span className="font-semibold text-xs block text-accent font-mono">{formatPrice(prod.price)}</span>
+                          <span className="font-semibold text-xs block text-accent font-mono">{formatPrice(getDisplayPrice(prod))}</span>
                         </div>
                       </div>
                     );
@@ -287,7 +287,7 @@ export default function HomePage() {
                       <div className="space-y-2">
                         <span className="text-[9px] text-zinc-400 uppercase tracking-widest block">Collection Piece</span>
                         <h4 className="font-serif text-base text-white font-light leading-snug">{prod.name}</h4>
-                        <span className="font-mono text-xs text-accent block">{formatPrice(prod.price)}</span>
+                        <span className="font-mono text-xs text-accent block">{formatPrice(getDisplayPrice(prod))}</span>
                         <Link href={`/shop/${prod.slug}`} className="text-[9px] uppercase font-bold tracking-widest border-b border-accent pb-0.5 text-accent hover:text-white hover:border-white transition block w-fit mt-2">
                           View details
                         </Link>
@@ -420,7 +420,7 @@ export default function HomePage() {
                     <h3 className="font-serif text-xl font-bold tracking-wide mt-0.5">
                       {quickViewProduct.name}
                     </h3>
-                    <div className="text-accent font-mono font-bold text-sm mt-1">{formatPrice(quickViewProduct.price)}</div>
+                    <div className="text-accent font-mono font-bold text-sm mt-1">{formatPrice(getDisplayPrice(quickViewProduct))}</div>
                   </div>
 
                   <p className="text-zinc-500 text-xs leading-relaxed font-light line-clamp-3">

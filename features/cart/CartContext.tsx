@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { CartItem, Product } from "@/types";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useRouter } from "next/navigation";
+import { getDisplayPrice } from "@/utils";
 
 interface CartContextType {
   cart: CartItem[];
@@ -125,7 +126,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
-  const cartTotal = cart.reduce((total, item) => total + (item.product?.price || 0) * item.quantity, 0);
+  const cartTotal = cart.reduce((total, item) => total + getDisplayPrice(item.product) * item.quantity, 0);
 
   return (
     <CartContext.Provider

@@ -14,6 +14,15 @@ export function formatPrice(price: number): string {
   }).format(price);
 }
 
+export function getDisplayPrice(product?: { price: number; taxInclusive?: boolean } | null): number {
+  if (!product) return 0;
+  if (product.taxInclusive) {
+    return product.price / 1.18;
+  }
+  return product.price;
+}
+
+
 export function slugify(text: string): string {
   return text
     .toString()
