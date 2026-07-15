@@ -243,41 +243,6 @@ export default function SettingsPage() {
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
-                    Favicon Icon URL
-                  </label>
-                  <input
-                    type="text"
-                    value={brand.faviconUrl}
-                    onChange={(e) => updateBrand({ faviconUrl: e.target.value })}
-                    className="w-full bg-[#0A0A0A] border border-[#1C1C1C] px-3 py-2.5 focus:outline-none focus:border-accent text-xs text-white"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
-                    Primary Logo URL (Solid BG)
-                  </label>
-                  <input
-                    type="text"
-                    value={brand.logoUrl}
-                    onChange={(e) => updateBrand({ logoUrl: e.target.value })}
-                    className="w-full bg-[#0A0A0A] border border-[#1C1C1C] px-3 py-2.5 focus:outline-none focus:border-accent text-xs text-white"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
-                    Transparent Logo URL
-                  </label>
-                  <input
-                    type="text"
-                    value={brand.transparentLogoUrl}
-                    onChange={(e) => updateBrand({ transparentLogoUrl: e.target.value })}
-                    className="w-full bg-[#0A0A0A] border border-[#1C1C1C] px-3 py-2.5 focus:outline-none focus:border-accent text-xs text-white"
-                  />
-                </div>
               </div>
             </motion.div>
           )}
