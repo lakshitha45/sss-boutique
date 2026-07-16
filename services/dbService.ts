@@ -1368,7 +1368,7 @@ export const dbService = {
         throw itemsErr;
       }
 
-      // Decrement stock & check low stock
+      // Check and trigger low stock alerts after insertion (handled by DB trigger)
       for (const item of order.items) {
         if (item.variantId) {
           const { data: currentVariant } = await supabase
@@ -1376,27 +1376,13 @@ export const dbService = {
             .select("stock, sku")
             .eq("id", item.variantId)
             .single();
-          if (currentVariant) {
-            const newVarStock = Math.max(0, currentVariant.stock - item.quantity);
-            await supabase.from("product_variants").update({ stock: newVarStock }).eq("id", item.variantId);
-            
-            if (newVarStock < 5) {
-              await this.createNotification(
-                "low_stock",
-                "Low Stock Alert",
-                `Variant ${currentVariant.sku} stock level is low: ${newVarStock} remaining.`
-              );
-            }
+          if (currentVariant && currentVariant.stock < 5) {
+            await this.createNotification(
+              "low_stock",
+              "Low Stock Alert",
+              `Variant ${currentVariant.sku} stock level is low: ${currentVariant.stock} remaining.`
+            );
           }
-        }
-        
-        const { data: allVars } = await supabase
-          .from("product_variants")
-          .select("stock")
-          .eq("product_id", item.productId);
-        if (allVars) {
-          const newCumStock = allVars.reduce((sum, v) => sum + v.stock, 0);
-          await supabase.from("products").update({ stock: newCumStock }).eq("id", item.productId);
         }
       }
 
