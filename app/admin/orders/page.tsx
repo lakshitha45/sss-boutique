@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import { fetchOrders, changeOrderStatus, getExportCsv } from "@/features/orders/orderActions";
-import { createNewShipment, fetchShipments } from "@/features/shipments/shipmentActions";
+import { createNewShipment, fetchShipments, modifyShipment } from "@/features/shipments/shipmentActions";
 import { Order } from "@/types";
+import { supabase } from "@/lib/supabase";
 import { formatPrice } from "@/utils";
 import { motion as m, AnimatePresence } from "framer-motion";
 import { Search, AlertCircle, Edit2, Check, Printer, FileText, MapPin, Phone, User, Calendar, CreditCard, Sparkles, X, ChevronRight, Download, Filter, ArrowUpDown, Clock } from "lucide-react";
@@ -67,11 +68,18 @@ export default function OrderManagementPage() {
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
   const [exporting, setExporting] = useState(false);
 
+  const getAuthToken = async () => {
+    if (!supabase) return undefined;
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token;
+  };
+
   const loadOrdersData = async () => {
     try {
+      const token = await getAuthToken();
       const [allOrders, allShipments] = await Promise.all([
-        fetchOrders(),
-        fetchShipments()
+        fetchOrders(token),
+        fetchShipments(token)
       ]);
       setOrders(allOrders);
 
@@ -108,8 +116,25 @@ export default function OrderManagementPage() {
     }
 
     try {
-      const res = await changeOrderStatus(id, status, undefined, "admin");
+      const token = await getAuthToken();
+      const res = await changeOrderStatus(id, status, undefined, "admin", token);
       if (res.success) {
+        // Automatically sync/create a shipment record if a tracking number exists!
+        const order = orders.find((o) => o.id === id);
+        if (order && order.trackingNumber) {
+          const shipments = await fetchShipments(token);
+          const matchingShipment = shipments.find((s) => s.orderId === id);
+          if (!matchingShipment) {
+            const courierName = selectedCouriers[id] && selectedCouriers[id] !== "Not Assigned" ? selectedCouriers[id] : "Delhivery";
+            await createNewShipment({
+              orderId: id,
+              courierName: courierName,
+              trackingNumber: order.trackingNumber,
+              status: status === "Shipped" || status === "Delivered" ? (status === "Shipped" ? "In Transit" : "Delivered") : "Packed"
+            }, token);
+          }
+        }
+
         if (selectedOrderDetails?.id === id && res.order) {
           setSelectedOrderDetails(res.order);
         }
@@ -131,12 +156,13 @@ export default function OrderManagementPage() {
 
     try {
       setLoading(true);
+      const token = await getAuthToken();
       const res = await createNewShipment({
         orderId: shippingOrderId,
         courierName: shipCourier,
         trackingNumber: shipTracking.trim(),
         status: "In Transit",
-      });
+      }, token);
 
       if (res.success) {
         setShippingOrderId(null);
@@ -154,15 +180,28 @@ export default function OrderManagementPage() {
 
   const handleSaveTracking = async (id: string, currentStatus: string) => {
     try {
-      const courierName = selectedCouriers[id] || "Delhivery";
-      const res = await changeOrderStatus(id, currentStatus, tempTracking, "admin");
+      const token = await getAuthToken();
+      const courierName = selectedCouriers[id] && selectedCouriers[id] !== "Not Assigned" ? selectedCouriers[id] : "Delhivery";
+      const res = await changeOrderStatus(id, currentStatus, tempTracking, "admin", token);
       if (res.success) {
-        await createNewShipment({
-          orderId: id,
-          courierName: courierName,
-          trackingNumber: tempTracking.trim(),
-          status: currentStatus === "Shipped" || currentStatus === "Delivered" ? (currentStatus === "Shipped" ? "In Transit" : "Delivered") : "Packed"
-        });
+        // Sync or insert matching shipments table record
+        const shipments = await fetchShipments(token);
+        const matchingShipment = shipments.find((s) => s.orderId === id);
+
+        if (matchingShipment) {
+          await modifyShipment(matchingShipment.id, {
+            courierName: courierName,
+            trackingNumber: tempTracking.trim(),
+            status: currentStatus === "Shipped" || currentStatus === "Delivered" ? (currentStatus === "Shipped" ? "In Transit" : "Delivered") : "Packed"
+          }, token);
+        } else {
+          await createNewShipment({
+            orderId: id,
+            courierName: courierName,
+            trackingNumber: tempTracking.trim(),
+            status: currentStatus === "Shipped" || currentStatus === "Delivered" ? (currentStatus === "Shipped" ? "In Transit" : "Delivered") : "Packed"
+          }, token);
+        }
 
         setEditingTrackingId(null);
         if (selectedOrderDetails?.id === id && res.order) {
@@ -177,8 +216,31 @@ export default function OrderManagementPage() {
     }
   };
 
-  const handleCourierChange = (id: string, name: string) => {
+  const handleCourierChange = async (id: string, name: string) => {
     setSelectedCouriers((prev) => ({ ...prev, [id]: name }));
+    
+    const order = orders.find((o) => o.id === id);
+    if (order && order.trackingNumber) {
+      try {
+        const token = await getAuthToken();
+        const shipments = await fetchShipments(token);
+        const matchingShipment = shipments.find((s) => s.orderId === id);
+        
+        if (matchingShipment) {
+          await modifyShipment(matchingShipment.id, { courierName: name }, token);
+        } else {
+          await createNewShipment({
+            orderId: id,
+            courierName: name,
+            trackingNumber: order.trackingNumber,
+            status: order.orderStatus === "Shipped" || order.orderStatus === "Delivered" ? (order.orderStatus === "Shipped" ? "In Transit" : "Delivered") : "Packed"
+          }, token);
+        }
+        loadOrdersData();
+      } catch (err) {
+        console.error("Failed to save courier change", err);
+      }
+    }
   };
 
   const handlePrintInvoice = () => {

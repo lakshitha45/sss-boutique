@@ -5,6 +5,8 @@ import { dbService } from "@/services/dbService";
 import { NotificationService } from "@/services/notificationService";
 import { Order, GstLog } from "@/types";
 
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+
 export async function placeOrder(
   orderData: Omit<Order, "id" | "createdAt" | "orderNumber" | "paymentStatus" | "orderStatus">
 ): Promise<{ success: boolean; order?: Order; error?: string }> {
@@ -25,8 +27,14 @@ export async function placeOrder(
   }
 }
 
-export async function fetchOrders(): Promise<Order[]> {
+export async function fetchOrders(token?: string): Promise<Order[]> {
   try {
+    if (token && isSupabaseConfigured() && supabase) {
+      await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: ""
+      });
+    }
     return await dbService.getOrders();
   } catch (err) {
     console.error("Failed to fetch orders", err);
@@ -38,9 +46,16 @@ export async function changeOrderStatus(
   id: string,
   status: string,
   trackingNumber?: string,
-  executor: string = "admin"
+  executor: string = "admin",
+  token?: string
 ): Promise<{ success: boolean; order?: Order; error?: string }> {
   try {
+    if (token && isSupabaseConfigured() && supabase) {
+      await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: ""
+      });
+    }
     const order = await dbService.updateOrderStatus(id, status, trackingNumber, executor);
     
     try {

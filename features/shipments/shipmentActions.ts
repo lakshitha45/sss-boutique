@@ -4,9 +4,16 @@ import { revalidatePath } from "next/cache";
 import { dbService } from "@/services/dbService";
 import { NotificationService } from "@/services/notificationService";
 import { Shipment } from "@/types";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
-export async function fetchShipments(): Promise<Shipment[]> {
+export async function fetchShipments(token?: string): Promise<Shipment[]> {
   try {
+    if (token && isSupabaseConfigured() && supabase) {
+      await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: ""
+      });
+    }
     return await dbService.getShipments();
   } catch (err) {
     console.error("Failed to fetch shipments", err);
@@ -14,8 +21,14 @@ export async function fetchShipments(): Promise<Shipment[]> {
   }
 }
 
-export async function fetchShipmentByOrderId(orderId: string): Promise<Shipment | null> {
+export async function fetchShipmentByOrderId(orderId: string, token?: string): Promise<Shipment | null> {
   try {
+    if (token && isSupabaseConfigured() && supabase) {
+      await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: ""
+      });
+    }
     return await dbService.getShipmentByOrderId(orderId);
   } catch (err) {
     console.error(`Failed to fetch shipment for order ${orderId}`, err);
@@ -24,9 +37,16 @@ export async function fetchShipmentByOrderId(orderId: string): Promise<Shipment 
 }
 
 export async function createNewShipment(
-  shipment: Omit<Shipment, "id" | "createdAt" | "updatedAt" | "timeline">
+  shipment: Omit<Shipment, "id" | "createdAt" | "updatedAt" | "timeline">,
+  token?: string
 ): Promise<{ success: boolean; shipment?: Shipment; error?: string }> {
   try {
+    if (token && isSupabaseConfigured() && supabase) {
+      await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: ""
+      });
+    }
     const data = await dbService.createShipment(shipment);
     
     // Trigger notification
@@ -50,9 +70,16 @@ export async function createNewShipment(
 
 export async function modifyShipment(
   id: string,
-  updates: Partial<Shipment>
+  updates: Partial<Shipment>,
+  token?: string
 ): Promise<{ success: boolean; shipment?: Shipment; error?: string }> {
   try {
+    if (token && isSupabaseConfigured() && supabase) {
+      await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: ""
+      });
+    }
     // Load current shipment state to fetch order info
     const shipments = await dbService.getShipments();
     const current = shipments.find(s => s.id === id);
@@ -80,8 +107,14 @@ export async function modifyShipment(
   }
 }
 
-export async function removeShipment(id: string): Promise<{ success: boolean; error?: string }> {
+export async function removeShipment(id: string, token?: string): Promise<{ success: boolean; error?: string }> {
   try {
+    if (token && isSupabaseConfigured() && supabase) {
+      await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: ""
+      });
+    }
     const success = await dbService.deleteShipment(id);
     revalidatePath("/admin/shipments");
     revalidatePath("/admin/orders");

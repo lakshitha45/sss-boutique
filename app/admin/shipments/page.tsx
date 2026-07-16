@@ -7,6 +7,7 @@ import { Shipment, Order } from "@/types";
 import { formatPrice } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, AlertCircle, Edit2, Trash2, Check, Truck, Clock, Eye, Calendar, User, Phone, MapPin, X, ArrowUpDown, Filter, Plus } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 const COURIER_OPTIONS = ["Professional Couriers", "DTDC", "Blue Dart", "Delhivery", "India Post", "Other"];
 
@@ -57,11 +58,18 @@ export default function AdminShipmentDashboard() {
   const [editNotes, setEditNotes] = useState("");
   const [editEstDate, setEditEstDate] = useState("");
 
+  const getAuthToken = async () => {
+    if (!supabase) return undefined;
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token;
+  };
+
   const loadData = async () => {
     try {
-      const shps = await fetchShipments();
+      const token = await getAuthToken();
+      const shps = await fetchShipments(token);
       setShipments(shps);
-      const ords = await fetchOrders();
+      const ords = await fetchOrders(token);
       setOrders(ords);
     } catch (e) {
       console.error(e);
@@ -81,6 +89,7 @@ export default function AdminShipmentDashboard() {
       return;
     }
     const finalCourier = selectedCourier === "Other" ? customCourierName : selectedCourier;
+    const token = await getAuthToken();
     const res = await createNewShipment({
       orderId: selectedOrderId,
       courierName: finalCourier || "Other",
@@ -88,7 +97,7 @@ export default function AdminShipmentDashboard() {
       status: shipmentStatus,
       estimatedDeliveryDate: estDeliveryDate || undefined,
       notes
-    });
+    }, token);
 
     if (res.success) {
       setShowCreateModal(false);
@@ -106,13 +115,14 @@ export default function AdminShipmentDashboard() {
     e.preventDefault();
     if (!editingShipment) return;
     const finalCourier = editCourier === "Other" ? editCustomCourier : editCourier;
+    const token = await getAuthToken();
     const res = await modifyShipment(editingShipment.id, {
       courierName: finalCourier || "Other",
       trackingNumber: editTracking,
       status: editStatus,
       estimatedDeliveryDate: editEstDate || undefined,
       notes: editNotes
-    });
+    }, token);
 
     if (res.success) {
       setEditingShipment(null);
@@ -124,7 +134,8 @@ export default function AdminShipmentDashboard() {
 
   const handleDeleteShipment = async (id: string) => {
     if (confirm("Are you sure you want to delete this shipment?")) {
-      const res = await removeShipment(id);
+      const token = await getAuthToken();
+      const res = await removeShipment(id, token);
       if (res.success) {
         loadData();
       } else {
