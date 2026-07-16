@@ -78,6 +78,13 @@ export async function createNewShipment(
 ): Promise<{ success: boolean; shipment?: Shipment; error?: string }> {
   try {
     await ensureAuth(token);
+    
+    // Check if a shipment already exists for this order
+    const existing = await dbService.getShipmentByOrderId(shipment.orderId);
+    if (existing) {
+      return { success: false, error: "A shipment record already exists for this order. Double shipments are not permitted." };
+    }
+    
     const data = await dbService.createShipment(shipment);
     
     // Trigger notification
