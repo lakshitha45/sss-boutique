@@ -1340,25 +1340,41 @@ export const dbService = {
       
       if (oErr) throw oErr;
 
-      const itemsToInsert = order.items.map((item) => ({
-        order_id: oData.id,
-        product_id: item.productId,
-        product_name: item.productName,
-        product_image: item.productImage,
-        variant_id: item.variantId,
-        variant_size: item.variantSize,
-        quantity: item.quantity,
-        price: item.price,
-      }));
+      const itemsToInsert = [];
+      for (const item of order.items) {
+        let actualVariantId = item.variantId;
+        if (!actualVariantId && item.productId && item.variantSize) {
+          const { data: vRec } = await supabase
+            .from("product_variants")
+            .select("id")
+            .eq("product_id", item.productId)
+            .eq("size", item.variantSize)
+            .maybeSingle();
+          if (vRec) {
+            actualVariantId = vRec.id;
+          }
+        }
+
+        itemsToInsert.push({
+          order_id: oData.id,
+          product_id: item.productId,
+          product_name: item.productName,
+          product_image: item.productImage,
+          variant_id: actualVariantId || null,
+          variant_size: item.variantSize,
+          quantity: item.quantity,
+          price: item.price,
+        });
+      }
 
       const { error: itemsErr } = await supabase.from("order_items").insert(itemsToInsert);
       
       if (itemsErr && (itemsErr.code === "42703" || (itemsErr.message && itemsErr.message.toLowerCase().includes("column")))) {
         console.warn("Order items table lacks product details/size columns. Retrying insert with base columns.");
-        const baseItemsToInsert = order.items.map((item) => ({
-          order_id: oData.id,
-          product_id: item.productId,
-          variant_id: item.variantId,
+        const baseItemsToInsert = itemsToInsert.map((item) => ({
+          order_id: item.order_id,
+          product_id: item.product_id,
+          variant_id: item.variant_id,
           quantity: item.quantity,
           price: item.price,
         }));
@@ -1583,47 +1599,79 @@ export const dbService = {
       if (!prevDeducted && newDeducted) {
         // Transitioned to packed/shipped/delivered -> Deduct Stock!
         for (const item of currentOrder.order_items || []) {
-          if (item.variant_id) {
+          let varId = item.variant_id;
+          if (!varId && item.product_id && item.variant_size) {
+            const { data: vData } = await supabase
+              .from("product_variants")
+              .select("id")
+              .eq("product_id", item.product_id)
+              .eq("size", item.variant_size)
+              .maybeSingle();
+            if (vData) {
+              varId = vData.id;
+            }
+          }
+
+          if (varId) {
             const { data: vData } = await supabase
               .from("product_variants")
               .select("stock")
-              .eq("id", item.variant_id)
+              .eq("id", varId)
               .single();
             if (vData) {
               const newStock = Math.max(0, vData.stock - item.quantity);
-              await supabase.from("product_variants").update({ stock: newStock }).eq("id", item.variant_id);
+              await supabase.from("product_variants").update({ stock: newStock }).eq("id", varId);
             }
           }
-          const { data: allVars } = await supabase
-            .from("product_variants")
-            .select("stock")
-            .eq("product_id", item.product_id);
-          if (allVars) {
-            const newCumStock = allVars.reduce((sum, v) => sum + v.stock, 0);
-            await supabase.from("products").update({ stock: newCumStock }).eq("id", item.product_id);
+
+          if (item.product_id) {
+            const { data: allVars } = await supabase
+              .from("product_variants")
+              .select("stock")
+              .eq("product_id", item.product_id);
+            if (allVars) {
+              const newCumStock = allVars.reduce((sum, v) => sum + v.stock, 0);
+              await supabase.from("products").update({ stock: newCumStock }).eq("id", item.product_id);
+            }
           }
         }
       } else if (prevDeducted && !newDeducted) {
         // Transitioned out of packed/shipped/delivered (e.g. cancelled/refunded) -> Restore Stock!
         for (const item of currentOrder.order_items || []) {
-          if (item.variant_id) {
+          let varId = item.variant_id;
+          if (!varId && item.product_id && item.variant_size) {
+            const { data: vData } = await supabase
+              .from("product_variants")
+              .select("id")
+              .eq("product_id", item.product_id)
+              .eq("size", item.variant_size)
+              .maybeSingle();
+            if (vData) {
+              varId = vData.id;
+            }
+          }
+
+          if (varId) {
             const { data: vData } = await supabase
               .from("product_variants")
               .select("stock")
-              .eq("id", item.variant_id)
+              .eq("id", varId)
               .single();
             if (vData) {
               const restoredStock = vData.stock + item.quantity;
-              await supabase.from("product_variants").update({ stock: restoredStock }).eq("id", item.variant_id);
+              await supabase.from("product_variants").update({ stock: restoredStock }).eq("id", varId);
             }
           }
-          const { data: allVars } = await supabase
-            .from("product_variants")
-            .select("stock")
-            .eq("product_id", item.product_id);
-          if (allVars) {
-            const newCumStock = allVars.reduce((sum, v) => sum + v.stock, 0);
-            await supabase.from("products").update({ stock: newCumStock }).eq("id", item.product_id);
+
+          if (item.product_id) {
+            const { data: allVars } = await supabase
+              .from("product_variants")
+              .select("stock")
+              .eq("product_id", item.product_id);
+            if (allVars) {
+              const newCumStock = allVars.reduce((sum, v) => sum + v.stock, 0);
+              await supabase.from("products").update({ stock: newCumStock }).eq("id", item.product_id);
+            }
           }
         }
       }
