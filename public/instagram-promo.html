@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1080" />
+  <title>SSS Boutique For U — Instagram Post</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      font-family: 'Inter', sans-serif;
+      background: #fff;
+    }
+
+    /* ═══════════════════════════════════
+       ROOT CANVAS — Marble Background
+    ═══════════════════════════════════ */
+    .canvas {
+      width: 1080px;
+      height: 1080px;
+      position: relative;
+      overflow: hidden;
+      /* White marble base */
+      background-color: #fdf8f8;
+      background-image:
+        /* Pink marble veins */
+        repeating-linear-gradient(
+          128deg,
+          transparent 0px,
+          transparent 60px,
+          rgba(230,180,200,0.08) 60px,
+          rgba(230,180,200,0.08) 62px
+        ),
+        repeating-linear-gradient(
+          45deg,
+          transparent 0px,
+          transparent 120px,
+          rgba(210,160,185,0.06) 120px,
+          rgba(210,160,185,0.06) 122px
+        ),
+        /* Marble base gradient */
+        linear-gradient(150deg,
+          #ffffff 0%,
+          #fdf5f8 20%,
+          #fce8f0 40%,
+          #fdf5f8 60%,
+          #ffffff 80%,
+          #fdf0f5 100%
+        );
+    }
+
+    /* Marble texture veins overlay */
+    .marble-veins {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image:
+        radial-gradient(ellipse 800px 400px at 20% 30%, rgba(210,150,185,0.07) 0%, transparent 70%),
+        radial-gradient(ellipse 600px 300px at 80% 70%, rgba(220,160,195,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 400px 200px at 50% 10%, rgba(230,170,200,0.05) 0%, transparent 70%);
+    }
+
+    /* ── Top pink bar ── */
+    .top-bar {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 6px;
+      background: linear-gradient(90deg,
+        #c2185b 0%,
+        #e91e8c 25%,
+        #f06292 50%,
+        #e91e8c 75%,
+        #c2185b 100%
+      );
+      z-index: 20;
+    }
+
+    /* ── Bottom pink bar ── */
+    .bottom-bar {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 6px;
+      background: linear-gradient(90deg,
+        #c2185b 0%,
+        #e91e8c 25%,
+        #f06292 50%,
+        #e91e8c 75%,
+        #c2185b 100%
+      );
+      z-index: 20;
+    }
+
+    /* ═══════════════════════════════════
+       LEFT SIDE — Fashion Image
+    ═══════════════════════════════════ */
+    .image-side {
+      position: absolute;
+      left: 0; top: 0;
+      width: 540px;
+      height: 1080px;
+      overflow: hidden;
+      z-index: 1;
+    }
+
+    .image-side img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+    }
+
+    /* Right fade into marble */
+    .image-side::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to right,
+        transparent 0%,
+        transparent 50%,
+        rgba(253,245,248,0.5) 75%,
+        rgba(253,245,248,0.95) 100%
+      );
+    }
+
+    /* Top & bottom subtle overlays */
+    .image-overlay-top {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 120px;
+      background: linear-gradient(to bottom, rgba(253,245,248,0.4), transparent);
+      z-index: 2;
+    }
+
+    .image-overlay-bottom {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 120px;
+      background: linear-gradient(to top, rgba(253,245,248,0.5), transparent);
+      z-index: 2;
+    }
+
+    /* ═══════════════════════════════════
+       RIGHT SIDE — Content Area
+    ═══════════════════════════════════ */
+    .content-side {
+      position: absolute;
+      right: 0; top: 0;
+      width: 560px;
+      height: 1080px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 52px;
+      z-index: 5;
+    }
+
+    /* ── Logo Area ── */
+    .logo-container {
+      width: 220px;
+      margin-bottom: 28px;
+      flex-shrink: 0;
+    }
+
+    .logo-container img {
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+      /* Remove white bg so marble shows through */
+      mix-blend-mode: multiply;
+    }
+
+    /* SVG fallback logo if image not found */
+    .logo-fallback {
+      width: 220px;
+      margin-bottom: 28px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .logo-fallback .sss-text {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 56px;
+      font-weight: 800;
+      color: #e91e8c;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      text-shadow:
+        2px 2px 0 #c2185b,
+        4px 4px 8px rgba(195,25,139,0.25);
+    }
+
+    .logo-fallback .boutique-text {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: #ad1457;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      margin-top: -2px;
+    }
+
+    .logo-fallback .for-u {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      color: #e91e8c;
+      letter-spacing: 0.2em;
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .logo-fallback .diamond {
+      width: 8px;
+      height: 8px;
+      background: #e91e8c;
+      transform: rotate(45deg);
+      display: inline-block;
+    }
+
+    /* ── Pink divider ── */
+    .pink-divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      margin-bottom: 24px;
+    }
+
+    .pink-divider .line {
+      flex: 1;
+      height: 1.5px;
+      background: linear-gradient(90deg, transparent, #e91e8c, transparent);
+    }
+
+    .pink-divider .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #e91e8c;
+      flex-shrink: 0;
+    }
+
+    /* ── Instagram Row ── */
+    .insta-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .insta-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #f9ce34 0%, #ee2a7b 45%, #6228d7 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 3px 12px rgba(238,42,123,0.4);
+    }
+
+    .insta-icon svg {
+      width: 20px;
+      height: 20px;
+      stroke: white;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .insta-handle {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: #ad1457;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Main Heading ── */
+    .main-heading {
+      font-family: 'Playfair Display', serif;
+      font-size: 34px;
+      font-weight: 700;
+      line-height: 1.2;
+      color: #1a0a10;
+      text-align: center;
+      margin-bottom: 10px;
+      letter-spacing: -0.01em;
+    }
+
+    .main-heading .italic-pink {
+      font-style: italic;
+      color: #e91e8c;
+    }
+
+    /* ── Tagline ── */
+    .tagline {
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      color: #9e6880;
+      letter-spacing: 0.05em;
+      text-align: center;
+      line-height: 1.7;
+      margin-bottom: 30px;
+    }
+
+    /* ── Category Pills ── */
+    .pills-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 30px;
+    }
+
+    .pill {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #c2185b;
+      background: rgba(233,30,140,0.07);
+      border: 1px solid rgba(233,30,140,0.3);
+      padding: 6px 16px;
+      border-radius: 100px;
+    }
+
+    /* ── Stats Row ── */
+    .stats-row {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      margin-bottom: 32px;
+      border: 1.5px solid rgba(233,30,140,0.18);
+      border-radius: 16px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.6);
+      backdrop-filter: blur(8px);
+    }
+
+    .stat-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 8px;
+    }
+
+    .stat-item + .stat-item {
+      border-left: 1.5px solid rgba(233,30,140,0.18);
+    }
+
+    .stat-number {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: #e91e8c;
+      line-height: 1;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 8.5px;
+      font-weight: 600;
+      color: #c2185b;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    /* ── Follow Button ── */
+    .follow-btn {
+      width: 100%;
+      padding: 18px 0;
+      background: linear-gradient(135deg, #c2185b 0%, #e91e8c 50%, #f06292 100%);
+      color: white;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow:
+        0 8px 32px rgba(233,30,140,0.4),
+        0 2px 8px rgba(233,30,140,0.2);
+      margin-bottom: 18px;
+      text-decoration: none;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .follow-btn::before {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%; right: 100%; bottom: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transform: skewX(-20deg);
+    }
+
+    .follow-btn svg {
+      width: 18px;
+      height: 18px;
+      stroke: white;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* ── Or separator ── */
+    .or-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      margin-bottom: 14px;
+    }
+
+    .or-line {
+      flex: 1;
+      height: 1px;
+      background: rgba(194,24,91,0.15);
+    }
+
+    .or-text {
+      font-family: 'Inter', sans-serif;
+      font-size: 10px;
+      color: #d48ab0;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    /* ── URL ── */
+    .url-text {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      color: #b06080;
+      letter-spacing: 0.03em;
+      text-align: center;
+    }
+
+    /* ═══════════════════════════════════
+       DECORATIVE ELEMENTS
+    ═══════════════════════════════════ */
+
+    /* Floating pink diamond top right */
+    .deco-diamond-tr {
+      position: absolute;
+      top: 44px;
+      right: 44px;
+      width: 28px;
+      height: 28px;
+      background: rgba(233,30,140,0.15);
+      border: 1.5px solid rgba(233,30,140,0.3);
+      transform: rotate(45deg);
+      z-index: 3;
+      border-radius: 4px;
+    }
+
+    /* Small pink dots scattered */
+    .deco-dot {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(233,30,140,0.12);
+      z-index: 2;
+    }
+
+    /* Corner bracket top-left */
+    .corner-bracket-tl {
+      position: absolute;
+      top: 22px;
+      left: 22px;
+      width: 50px;
+      height: 50px;
+      border-top: 2.5px solid rgba(233,30,140,0.4);
+      border-left: 2.5px solid rgba(233,30,140,0.4);
+      z-index: 10;
+      border-radius: 4px 0 0 0;
+    }
+
+    .corner-bracket-tr {
+      position: absolute;
+      top: 22px;
+      right: 22px;
+      width: 50px;
+      height: 50px;
+      border-top: 2.5px solid rgba(233,30,140,0.4);
+      border-right: 2.5px solid rgba(233,30,140,0.4);
+      z-index: 10;
+      border-radius: 0 4px 0 0;
+    }
+
+    .corner-bracket-bl {
+      position: absolute;
+      bottom: 22px;
+      left: 22px;
+      width: 50px;
+      height: 50px;
+      border-bottom: 2.5px solid rgba(233,30,140,0.4);
+      border-left: 2.5px solid rgba(233,30,140,0.4);
+      z-index: 10;
+      border-radius: 0 0 0 4px;
+    }
+
+    .corner-bracket-br {
+      position: absolute;
+      bottom: 22px;
+      right: 22px;
+      width: 50px;
+      height: 50px;
+      border-bottom: 2.5px solid rgba(233,30,140,0.4);
+      border-right: 2.5px solid rgba(233,30,140,0.4);
+      z-index: 10;
+      border-radius: 0 0 4px 0;
+    }
+
+    /* ── Bottom Center Tagline Badge ── */
+    .bottom-tag {
+      position: absolute;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 15;
+      white-space: nowrap;
+    }
+
+    .bottom-tag-diamond {
+      width: 7px;
+      height: 7px;
+      background: #e91e8c;
+      transform: rotate(45deg);
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+
+    .bottom-tag-text {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.3em;
+      color: rgba(173,20,87,0.65);
+      text-transform: uppercase;
+    }
+
+    /* ── Large faint "SSS" watermark behind image ── */
+    .bg-watermark {
+      position: absolute;
+      left: -30px;
+      bottom: 80px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 200px;
+      font-weight: 900;
+      color: rgba(233,30,140,0.04);
+      letter-spacing: -0.05em;
+      line-height: 1;
+      pointer-events: none;
+      z-index: 0;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas">
+
+    <!-- Marble texture layers -->
+    <div class="marble-veins"></div>
+
+    <!-- Top + Bottom pink bars -->
+    <div class="top-bar"></div>
+    <div class="bottom-bar"></div>
+
+    <!-- Corner decorative brackets -->
+    <div class="corner-bracket-tl"></div>
+    <div class="corner-bracket-tr"></div>
+    <div class="corner-bracket-bl"></div>
+    <div class="corner-bracket-br"></div>
+
+    <!-- Floating diamond decoration -->
+    <div class="deco-diamond-tr"></div>
+
+    <!-- Decorative dots -->
+    <div class="deco-dot" style="width:12px;height:12px;top:160px;right:80px;"></div>
+    <div class="deco-dot" style="width:8px;height:8px;top:220px;right:110px;opacity:0.7;"></div>
+    <div class="deco-dot" style="width:6px;height:6px;bottom:180px;right:90px;"></div>
+
+    <!-- Large faint watermark -->
+    <div class="bg-watermark">SSS</div>
+
+    <!-- Left: Fashion Image -->
+    <div class="image-side">
+      <img src="/kurti1.jpg" alt="SSS Boutique fashion" />
+      <div class="image-overlay-top"></div>
+      <div class="image-overlay-bottom"></div>
+    </div>
+
+    <!-- Right: Content Panel -->
+    <div class="content-side">
+
+      <!-- LOGO — uses actual logo if placed as /logo.png -->
+      <div class="logo-container" id="logoBox">
+        <img
+          src="/logo.png"
+          alt="SSS Boutique For U Logo"
+          onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='block';"
+        />
+      </div>
+      <!-- SVG fallback logo (shown if logo.png not found) -->
+      <div class="logo-fallback" id="logoFallback" style="display:none;">
+        <div class="sss-text">SSS</div>
+        <div class="boutique-text">Boutique</div>
+        <div class="for-u">
+          <span class="diamond"></span>
+          For U
+          <span class="diamond"></span>
+        </div>
+      </div>
+
+      <!-- Pink divider -->
+      <div class="pink-divider">
+        <div class="line"></div>
+        <div class="dot"></div>
+        <div class="line"></div>
+      </div>
+
+      <!-- Instagram handle row -->
+      <div class="insta-row">
+        <div class="insta-icon">
+          <svg viewBox="0 0 24 24">
+            <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+            <circle cx="12" cy="12" r="4.5"/>
+            <circle cx="17.5" cy="6.5" r="1.2" fill="white" stroke="none"/>
+          </svg>
+        </div>
+        <span class="insta-handle">@sss_boutique_for_u</span>
+      </div>
+
+      <!-- Main Heading -->
+      <h1 class="main-heading">
+        Discover the <span class="italic-pink">Latest</span><br/>Fashion Trends
+      </h1>
+
+      <!-- Tagline -->
+      <p class="tagline">
+        New Arrivals &nbsp;&bull;&nbsp; Premium Quality<br/>
+        Exclusive Collections &nbsp;&bull;&nbsp; Luxury Kurtis
+      </p>
+
+      <!-- Category Pills -->
+      <div class="pills-row">
+        <span class="pill">Kurtis</span>
+        <span class="pill">Festive Wear</span>
+        <span class="pill">Designer</span>
+        <span class="pill">New Arrivals</span>
+      </div>
+
+      <!-- Stats Row -->
+      <div class="stats-row">
+        <div class="stat-item">
+          <span class="stat-number">500+</span>
+          <span class="stat-label">Styles</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-number">10K+</span>
+          <span class="stat-label">Followers</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-number">&#9733; 4.9</span>
+          <span class="stat-label">Rated</span>
+        </div>
+      </div>
+
+      <!-- Follow CTA -->
+      <a class="follow-btn" href="https://www.instagram.com/sss_boutique_for_u/" target="_blank">
+        <svg viewBox="0 0 24 24">
+          <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+          <circle cx="12" cy="12" r="4.5"/>
+          <circle cx="17.5" cy="6.5" r="1.5" fill="white" stroke="none"/>
+        </svg>
+        Follow Now on Instagram
+      </a>
+
+      <!-- OR separator -->
+      <div class="or-row">
+        <div class="or-line"></div>
+        <span class="or-text">or visit</span>
+        <div class="or-line"></div>
+      </div>
+
+      <!-- URL -->
+      <div class="url-text">instagram.com/sss_boutique_for_u</div>
+
+    </div><!-- end content-side -->
+
+    <!-- Bottom branding badge -->
+    <div class="bottom-tag">
+      <div class="bottom-tag-diamond"></div>
+      <span class="bottom-tag-text">Premium Women's Fashion</span>
+      <div class="bottom-tag-diamond"></div>
+    </div>
+
+  </div>
+</body>
+</html>
