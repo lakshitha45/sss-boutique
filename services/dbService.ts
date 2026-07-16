@@ -1526,7 +1526,7 @@ export const dbService = {
     }
   },
 
-  async updateOrderStatus(id: string, status: string, trackingNumber?: string, executor: string = "admin"): Promise<Order> {
+  async updateOrderStatus(id: string, status: string, trackingNumber?: string, executor: string = "admin", courierName?: string): Promise<Order> {
     let mappedShipmentStatus: string | null = null;
     if (status === "Packed") {
       mappedShipmentStatus = "Packed";
@@ -1659,13 +1659,55 @@ export const dbService = {
                 .from("shipments")
                 .update({
                   status: mappedShipmentStatus,
-                  timeline: updatedTimeline
+                  timeline: updatedTimeline,
+                  ...(trackingNumber !== undefined ? { tracking_number: trackingNumber } : {}),
+                  ...(courierName ? { courier_name: courierName } : {})
+                })
+                .eq("id", shp.id);
+            }
+          } else {
+            // Auto-create shipment record since none exists
+            const tNumber = trackingNumber || currentOrder.tracking_number || `TEMP-${currentOrder.id.slice(-6).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+            const initialTimeline = [{
+              status: mappedShipmentStatus,
+              timestamp: new Date().toISOString(),
+              action: `Shipment auto-created during order status transition to ${status}`,
+              user: executor
+            }];
+
+            await supabase
+              .from("shipments")
+              .insert([{
+                order_id: id,
+                tracking_number: tNumber,
+                courier_name: courierName || "Delhivery",
+                status: mappedShipmentStatus,
+                shipping_date: new Date().toISOString(),
+                timeline: initialTimeline
+              }]);
+          }
+        } catch (shpErr) {
+          console.error("Failed to sync status update to shipments table:", shpErr);
+        }
+      } else if (trackingNumber !== undefined) {
+        try {
+          const { data: existingShipments } = await supabase
+            .from("shipments")
+            .select("id")
+            .eq("order_id", id);
+          
+          if (existingShipments && existingShipments.length > 0) {
+            for (const shp of existingShipments) {
+              await supabase
+                .from("shipments")
+                .update({
+                  tracking_number: trackingNumber
                 })
                 .eq("id", shp.id);
             }
           }
         } catch (shpErr) {
-          console.error("Failed to sync status update to shipments table:", shpErr);
+          console.error("Failed to update tracking number in shipments table:", shpErr);
         }
       }
 
@@ -1759,15 +1801,42 @@ export const dbService = {
       }
 
       if (mappedShipmentStatus) {
-        const shpIdx = db.shipments?.findIndex((s) => s.orderId === id);
-        if (shpIdx !== undefined && shpIdx !== -1) {
+        if (!db.shipments) db.shipments = [];
+        const shpIdx = db.shipments.findIndex((s) => s.orderId === id);
+        if (shpIdx !== -1) {
           db.shipments[shpIdx].status = mappedShipmentStatus;
+          if (trackingNumber !== undefined) db.shipments[shpIdx].trackingNumber = trackingNumber;
+          if (courierName) db.shipments[shpIdx].courierName = courierName;
           db.shipments[shpIdx].timeline = [...(db.shipments[shpIdx].timeline || []), {
             status: mappedShipmentStatus,
             timestamp: new Date().toISOString(),
             action: `Shipment status updated to ${mappedShipmentStatus} via order state transition`,
             user: executor
           }];
+        } else {
+          const tNumber = trackingNumber || db.orders[idx].trackingNumber || `TEMP-${db.orders[idx].id.slice(-6).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+          db.shipments.push({
+            id: `shp_${Date.now()}`,
+            orderId: id,
+            courierName: courierName || "Delhivery",
+            trackingNumber: tNumber,
+            status: mappedShipmentStatus,
+            shippingDate: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            timeline: [{
+              status: mappedShipmentStatus,
+              timestamp: new Date().toISOString(),
+              action: `Shipment auto-created during order status transition to ${status}`,
+              user: executor
+            }]
+          });
+        }
+      } else if (trackingNumber !== undefined && db.shipments) {
+        const shpIdx = db.shipments.findIndex((s) => s.orderId === id);
+        if (shpIdx !== -1) {
+          db.shipments[shpIdx].trackingNumber = trackingNumber;
+          if (courierName) db.shipments[shpIdx].courierName = courierName;
         }
       }
 

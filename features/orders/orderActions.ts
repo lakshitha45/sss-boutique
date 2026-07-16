@@ -47,7 +47,8 @@ export async function changeOrderStatus(
   status: string,
   trackingNumber?: string,
   executor: string = "admin",
-  token?: string
+  token?: string,
+  courierName?: string
 ): Promise<{ success: boolean; order?: Order; error?: string }> {
   try {
     if (token && isSupabaseConfigured() && supabase) {
@@ -56,7 +57,7 @@ export async function changeOrderStatus(
         refresh_token: ""
       });
     }
-    const order = await dbService.updateOrderStatus(id, status, trackingNumber, executor);
+    const order = await dbService.updateOrderStatus(id, status, trackingNumber, executor, courierName);
     
     try {
       await NotificationService.sendOrderStatusUpdate(order, status);

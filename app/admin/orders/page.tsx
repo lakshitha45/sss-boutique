@@ -117,24 +117,9 @@ export default function OrderManagementPage() {
 
     try {
       const token = await getAuthToken();
-      const res = await changeOrderStatus(id, status, undefined, "admin", token);
+      const courierName = selectedCouriers[id] && selectedCouriers[id] !== "Not Assigned" ? selectedCouriers[id] : undefined;
+      const res = await changeOrderStatus(id, status, undefined, "admin", token, courierName);
       if (res.success) {
-        // Automatically sync/create a shipment record if a tracking number exists!
-        const order = orders.find((o) => o.id === id);
-        if (order && order.trackingNumber) {
-          const shipments = await fetchShipments(token);
-          const matchingShipment = shipments.find((s) => s.orderId === id);
-          if (!matchingShipment) {
-            const courierName = selectedCouriers[id] && selectedCouriers[id] !== "Not Assigned" ? selectedCouriers[id] : "Delhivery";
-            await createNewShipment({
-              orderId: id,
-              courierName: courierName,
-              trackingNumber: order.trackingNumber,
-              status: status === "Shipped" || status === "Delivered" ? (status === "Shipped" ? "In Transit" : "Delivered") : "Packed"
-            }, token);
-          }
-        }
-
         if (selectedOrderDetails?.id === id && res.order) {
           setSelectedOrderDetails(res.order);
         }
@@ -220,7 +205,7 @@ export default function OrderManagementPage() {
     setSelectedCouriers((prev) => ({ ...prev, [id]: name }));
     
     const order = orders.find((o) => o.id === id);
-    if (order && order.trackingNumber) {
+    if (order) {
       try {
         const token = await getAuthToken();
         const shipments = await fetchShipments(token);
@@ -229,10 +214,12 @@ export default function OrderManagementPage() {
         if (matchingShipment) {
           await modifyShipment(matchingShipment.id, { courierName: name }, token);
         } else {
+          // If no shipment exists, create one with the selected courier and a temp tracking number!
+          const tNumber = order.trackingNumber || `TEMP-${order.id.slice(-6).toUpperCase()}-${Date.now().toString().slice(-4)}`;
           await createNewShipment({
             orderId: id,
             courierName: name,
-            trackingNumber: order.trackingNumber,
+            trackingNumber: tNumber,
             status: order.orderStatus === "Shipped" || order.orderStatus === "Delivered" ? (order.orderStatus === "Shipped" ? "In Transit" : "Delivered") : "Packed"
           }, token);
         }

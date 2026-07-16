@@ -372,7 +372,10 @@ export default function AdminShipmentDashboard() {
                     required
                   >
                     <option value="">-- Choose Packed Order --</option>
-                    {orders.filter(o => o.orderStatus === "packed" || o.orderStatus === "confirmed" || o.orderStatus === "pending").map((o) => (
+                    {orders.filter(o => {
+                      const s = o.orderStatus.toLowerCase();
+                      return s === "packed" || s === "ready for shipment" || s === "order confirmed" || s === "payment received" || s === "pending payment" || s === "processing";
+                    }).map((o) => (
                       <option key={o.id} value={o.id}>
                         {o.orderNumber || o.id.slice(-6).toUpperCase()} - {o.customerName} ({formatPrice(o.grandTotal)})
                       </option>
