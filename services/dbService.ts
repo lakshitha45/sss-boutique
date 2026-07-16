@@ -1544,41 +1544,6 @@ export const dbService = {
       };
       const updatedHistory = [...history, newEvent];
 
-      const isCancellation = status.toLowerCase() === "cancelled" || status.toLowerCase() === "returned" || status.toLowerCase() === "refunded";
-      const wasCancelled = previousStatus === "cancelled";
-
-      if (isCancellation && !wasCancelled) {
-        for (const item of currentOrder.order_items || []) {
-          if (item.variant_id) {
-            const { data: vData } = await supabase
-              .from("product_variants")
-              .select("stock")
-              .eq("id", item.variant_id)
-              .single();
-            if (vData) {
-              const restoredStock = vData.stock + item.quantity;
-              await supabase.from("product_variants").update({ stock: restoredStock }).eq("id", item.variant_id);
-            }
-          }
-          const { data: allVars } = await supabase
-            .from("product_variants")
-            .select("stock")
-            .eq("product_id", item.product_id);
-          if (allVars) {
-            const newCumStock = allVars.reduce((sum, v) => sum + v.stock, 0);
-            await supabase.from("products").update({ stock: newCumStock }).eq("id", item.product_id);
-          }
-        }
-
-        await this.createNotification(
-          "order_cancelled",
-          "Order Cancelled",
-          `Order ${currentOrder.order_number} has been cancelled.`
-        );
-
-        await this.logActivity(executor, "Order cancelled", `Order: ${currentOrder.order_number}`, "127.0.0.1");
-      }
-
       let mappedOrderStatus = "pending";
       let mappedPaymentStatus = currentOrder.payment_status;
 
@@ -1608,6 +1573,69 @@ export const dbService = {
       } else if (status === "Returned" || status === "Refunded") {
         mappedOrderStatus = "cancelled";
         mappedPaymentStatus = "refunded";
+      }
+
+      // Check transition for stock adjustment: stock is deducted only when order transitions to packed/shipped/delivered
+      const isDeducted = (s: string) => ["packed", "shipped", "delivered"].includes(s.toLowerCase());
+      const prevDeducted = isDeducted(previousStatus);
+      const newDeducted = isDeducted(mappedOrderStatus);
+
+      if (!prevDeducted && newDeducted) {
+        // Transitioned to packed/shipped/delivered -> Deduct Stock!
+        for (const item of currentOrder.order_items || []) {
+          if (item.variant_id) {
+            const { data: vData } = await supabase
+              .from("product_variants")
+              .select("stock")
+              .eq("id", item.variant_id)
+              .single();
+            if (vData) {
+              const newStock = Math.max(0, vData.stock - item.quantity);
+              await supabase.from("product_variants").update({ stock: newStock }).eq("id", item.variant_id);
+            }
+          }
+          const { data: allVars } = await supabase
+            .from("product_variants")
+            .select("stock")
+            .eq("product_id", item.product_id);
+          if (allVars) {
+            const newCumStock = allVars.reduce((sum, v) => sum + v.stock, 0);
+            await supabase.from("products").update({ stock: newCumStock }).eq("id", item.product_id);
+          }
+        }
+      } else if (prevDeducted && !newDeducted) {
+        // Transitioned out of packed/shipped/delivered (e.g. cancelled/refunded) -> Restore Stock!
+        for (const item of currentOrder.order_items || []) {
+          if (item.variant_id) {
+            const { data: vData } = await supabase
+              .from("product_variants")
+              .select("stock")
+              .eq("id", item.variant_id)
+              .single();
+            if (vData) {
+              const restoredStock = vData.stock + item.quantity;
+              await supabase.from("product_variants").update({ stock: restoredStock }).eq("id", item.variant_id);
+            }
+          }
+          const { data: allVars } = await supabase
+            .from("product_variants")
+            .select("stock")
+            .eq("product_id", item.product_id);
+          if (allVars) {
+            const newCumStock = allVars.reduce((sum, v) => sum + v.stock, 0);
+            await supabase.from("products").update({ stock: newCumStock }).eq("id", item.product_id);
+          }
+        }
+      }
+
+      // Handle specific notification logs for cancellation status transition
+      if (mappedOrderStatus === "cancelled" && previousStatus !== "cancelled") {
+        await this.createNotification(
+          "order_cancelled",
+          "Order Cancelled",
+          `Order ${currentOrder.order_number} has been cancelled.`
+        );
+        await this.logActivity(executor, "Order cancelled", `Order: ${currentOrder.order_number}`, "127.0.0.1");
       }
 
       const payload: any = {
