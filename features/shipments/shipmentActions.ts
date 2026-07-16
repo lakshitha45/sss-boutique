@@ -6,13 +6,15 @@ import { NotificationService } from "@/services/notificationService";
 import { Shipment } from "@/types";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
+import { cookies } from "next/headers";
+
 async function ensureAuth(token?: string) {
   if (!isSupabaseConfigured() || !supabase) return;
   let activeToken = token;
   if (!activeToken) {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      activeToken = session?.access_token;
+      const cookieStore = await cookies();
+      activeToken = cookieStore.get("sss_boutique_access_token")?.value;
     } catch (e) {
       console.error("Failed to read server-side session cookies:", e);
     }

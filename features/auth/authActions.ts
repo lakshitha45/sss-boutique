@@ -14,7 +14,16 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
   const session = cookieStore.get(SESSION_COOKIE_NAME);
   if (session?.value) {
     try {
-      return JSON.parse(session.value) as UserProfile;
+      const userProfile = JSON.parse(session.value) as UserProfile;
+      // Sync access token to database client singleton if present
+      const accessToken = cookieStore.get("sss_boutique_access_token")?.value;
+      if (accessToken && isSupabaseConfigured() && supabase) {
+        await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: ""
+        });
+      }
+      return userProfile;
     } catch { /* skip and check supabase fallback */ }
   }
 
@@ -98,6 +107,15 @@ export async function login(email: string, password?: string): Promise<{ success
         sameSite: "lax",
         maxAge: 60 * 60 * 24 * 7, // 1 week
       });
+
+      if (data.session?.access_token) {
+        cookieStore.set("sss_boutique_access_token", data.session.access_token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 60 * 60 * 24 * 7, // 1 week
+        });
+      }
 
       return { success: true, user: userProfile };
     } else {
@@ -190,6 +208,15 @@ export async function register(
         maxAge: 60 * 60 * 24 * 7, // 1 week
       });
 
+      if (data.session?.access_token) {
+        cookieStore.set("sss_boutique_access_token", data.session.access_token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 60 * 60 * 24 * 7, // 1 week
+        });
+      }
+
       try {
         await NotificationService.sendWelcomeEmail(fullName, email, userProfile.id);
       } catch (ne) {
@@ -237,12 +264,17 @@ export async function register(
 
 export async function logout(): Promise<{ success: boolean }> {
   if (isSupabaseConfigured() && supabase) {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("SignOut error:", e);
+    }
   }
   
-  // Clear Mock Cookie
+  // Clear Cookies
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE_NAME);
+  cookieStore.delete("sss_boutique_access_token");
   
   return { success: true };
 }
