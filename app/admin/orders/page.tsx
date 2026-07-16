@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { fetchOrders, changeOrderStatus, getExportCsv } from "@/features/orders/orderActions";
 import { createNewShipment, fetchShipments, modifyShipment } from "@/features/shipments/shipmentActions";
-import { Order } from "@/types";
+import { Order, Shipment } from "@/types";
 import { supabase } from "@/lib/supabase";
 import { formatPrice } from "@/utils";
 import { motion as m, AnimatePresence } from "framer-motion";
@@ -42,6 +42,7 @@ const COURIERS_LIST = ["Not Assigned", "Professional Couriers", "Delhivery", "Bl
 
 export default function OrderManagementPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Search & Filter state
@@ -82,6 +83,7 @@ export default function OrderManagementPage() {
         fetchShipments(token)
       ]);
       setOrders(allOrders);
+      setShipments(allShipments);
 
       const couriers: Record<string, string> = {};
       allOrders.forEach((ord) => {
@@ -489,61 +491,56 @@ export default function OrderManagementPage() {
                 </div>
               </div>
 
-              {/* Courier assignment & tracking */}
-              <div className="lg:col-span-4 p-5 flex flex-col justify-between space-y-4">
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block">Courier Partner</span>
-                    <select
-                      value={selectedCouriers[order.id] || "Delhivery"}
-                      onChange={(e) => handleCourierChange(order.id, e.target.value)}
-                      className="bg-[#0A0A0A] border border-[#1C1C1C] rounded-none px-3 py-2 text-[11px] focus:outline-none focus:border-accent text-white w-full"
-                    >
-                      {COURIERS_LIST.map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
+              {/* Courier assignment & tracking - Read Only from Shipments table */}
+              <div className="lg:col-span-4 p-5 flex flex-col justify-between space-y-4 border-l border-[#1C1C1C]/40">
+                <div className="space-y-4">
+                  <div className="border-b border-[#1C1C1C]/40 pb-2">
+                    <span className="text-[10px] text-accent font-bold uppercase tracking-widest block">Fulfillment Details</span>
                   </div>
+                  
+                  {(() => {
+                    const matchingShipment = shipments.find((s) => s.orderId === order.id);
+                    if (matchingShipment) {
+                      return (
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block">Courier Partner</span>
+                            <span className="text-xs font-semibold text-zinc-100 block py-1">
+                              {matchingShipment.courierName}
+                            </span>
+                          </div>
 
-                  <div className="space-y-1">
-                    <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block">Tracking Number</span>
-                    {editingTrackingId === order.id ? (
-                      <div className="flex items-center space-x-1">
-                        <input
-                          type="text"
-                          value={tempTracking}
-                          onChange={(e) => setTempTracking(e.target.value)}
-                          placeholder="Tracking Key..."
-                          className="bg-[#0A0A0A] border border-[#1C1C1C] px-3 py-2 text-[11px] w-full focus:outline-none text-white font-mono"
-                        />
-                        <button
-                          onClick={() => handleSaveTracking(order.id, order.orderStatus)}
-                          className="bg-accent text-foreground p-2 hover:bg-accent/90 transition flex-shrink-0"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between text-[11px] bg-[#0A0A0A] border border-[#1C1C1C] p-2.5 font-mono">
-                        <span className={`truncate max-w-[150px] ${order.trackingNumber ? "font-semibold text-accent" : "text-zinc-500"}`}>
-                          {order.trackingNumber || "Not Assigned"}
+                          <div className="space-y-1">
+                            <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block">Tracking Number</span>
+                            <span className="text-xs font-mono font-bold text-accent bg-[#121212] border border-[#1C1C1C] px-3 py-2 block w-fit">
+                              {matchingShipment.trackingNumber}
+                            </span>
+                          </div>
+
+                          <div className="space-y-1">
+                            <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block">Shipment Status</span>
+                            <span className="inline-block text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 bg-accent/10 text-accent border border-accent/20 rounded-full mt-1">
+                              {matchingShipment.status}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="py-6 text-center space-y-2">
+                        <span className="text-[10px] text-zinc-500 font-medium block">
+                          No shipment assigned yet.
                         </span>
-                        <button
-                          onClick={() => {
-                            setEditingTrackingId(order.id);
-                            setTempTracking(order.trackingNumber || "");
-                          }}
-                          className="text-zinc-500 hover:text-white transition p-0.5"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
+                        <span className="text-[9px] text-zinc-600 block">
+                          Transition this order to "Packed" or "Ready For Shipment" to create a shipment.
+                        </span>
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </div>
 
-                <div className="text-[9px] text-zinc-500 font-poppins">
-                  Order status logs are updated on transitions automatically.
+                <div className="text-[9px] text-zinc-500 font-poppins pt-2 border-t border-[#1C1C1C]/40">
+                  Manage carrier assignments & waybills in the Shipments tab.
                 </div>
               </div>
 
