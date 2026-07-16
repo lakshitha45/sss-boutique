@@ -10,23 +10,38 @@ import { cookies } from "next/headers";
 
 async function ensureAuth(token?: string) {
   if (!isSupabaseConfigured() || !supabase) return;
+  
   let activeToken = token;
-  if (!activeToken) {
-    try {
-      const cookieStore = await cookies();
+  let refreshToken: string | undefined = undefined;
+  
+  try {
+    const cookieStore = await cookies();
+    if (!activeToken) {
       activeToken = cookieStore.get("sss_boutique_access_token")?.value;
-    } catch (e) {
-      console.error("Failed to read server-side session cookies:", e);
     }
+    refreshToken = cookieStore.get("sss_boutique_refresh_token")?.value;
+  } catch (e) {
+    console.error("Failed to read server-side session cookies:", e);
   }
+
   if (activeToken) {
+    // 1. Manually inject Bearer token into Postgrest headers for immediate database RLS bypass
+    if ((supabase as any).rest) {
+      try {
+        (supabase as any).rest.headers.set("Authorization", `Bearer ${activeToken}`);
+      } catch (e) {
+        console.error("Failed to inject Bearer token header:", e);
+      }
+    }
+    
+    // 2. Set session on GoTrue client using access & refresh tokens
     try {
       await supabase.auth.setSession({
         access_token: activeToken,
-        refresh_token: ""
+        refresh_token: refreshToken || activeToken
       });
     } catch (e) {
-      console.error("Failed to apply token to database client:", e);
+      console.error("Failed to set session on Supabase auth client:", e);
     }
   }
 }

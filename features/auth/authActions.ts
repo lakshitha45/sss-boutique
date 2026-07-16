@@ -116,6 +116,14 @@ export async function login(email: string, password?: string): Promise<{ success
           maxAge: 60 * 60 * 24 * 7, // 1 week
         });
       }
+      if (data.session?.refresh_token) {
+        cookieStore.set("sss_boutique_refresh_token", data.session.refresh_token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 60 * 60 * 24 * 7, // 1 week
+        });
+      }
 
       return { success: true, user: userProfile };
     } else {
@@ -216,6 +224,14 @@ export async function register(
           maxAge: 60 * 60 * 24 * 7, // 1 week
         });
       }
+      if (data.session?.refresh_token) {
+        cookieStore.set("sss_boutique_refresh_token", data.session.refresh_token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 60 * 60 * 24 * 7, // 1 week
+        });
+      }
 
       try {
         await NotificationService.sendWelcomeEmail(fullName, email, userProfile.id);
@@ -275,6 +291,7 @@ export async function logout(): Promise<{ success: boolean }> {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE_NAME);
   cookieStore.delete("sss_boutique_access_token");
+  cookieStore.delete("sss_boutique_refresh_token");
   
   return { success: true };
 }
