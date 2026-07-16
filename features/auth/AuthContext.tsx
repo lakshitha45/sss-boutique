@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { UserProfile } from "@/types";
 import { getCurrentUser, login as apiLogin, register as apiRegister, logout as apiLogout } from "./authActions";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -37,6 +38,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     const res = await apiLogin(email, password);
     if (res.success && res.user) {
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          await supabase.auth.signInWithPassword({
+            email,
+            password: password || "defaultPassword123!",
+          });
+        } catch (supabaseErr) {
+          console.error("Failed to sign in client-side Supabase:", supabaseErr);
+        }
+      }
       setUser(res.user);
       setIsLoading(false);
       return { success: true };
@@ -49,6 +60,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     const res = await apiRegister(email, fullName, phone, password);
     if (res.success && res.user) {
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          await supabase.auth.signInWithPassword({
+            email,
+            password: password || "defaultPassword123!",
+          });
+        } catch (supabaseErr) {
+          console.error("Failed to sign in client-side Supabase:", supabaseErr);
+        }
+      }
       setUser(res.user);
       setIsLoading(false);
       return { success: true };
@@ -60,6 +81,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     setIsLoading(true);
     await apiLogout();
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.error("Failed client-side signOut:", e);
+      }
+    }
     setUser(null);
     setIsLoading(false);
   };

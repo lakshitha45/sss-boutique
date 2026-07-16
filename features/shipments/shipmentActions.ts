@@ -6,14 +6,32 @@ import { NotificationService } from "@/services/notificationService";
 import { Shipment } from "@/types";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
-export async function fetchShipments(token?: string): Promise<Shipment[]> {
-  try {
-    if (token && isSupabaseConfigured() && supabase) {
+async function ensureAuth(token?: string) {
+  if (!isSupabaseConfigured() || !supabase) return;
+  let activeToken = token;
+  if (!activeToken) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      activeToken = session?.access_token;
+    } catch (e) {
+      console.error("Failed to read server-side session cookies:", e);
+    }
+  }
+  if (activeToken) {
+    try {
       await supabase.auth.setSession({
-        access_token: token,
+        access_token: activeToken,
         refresh_token: ""
       });
+    } catch (e) {
+      console.error("Failed to apply token to database client:", e);
     }
+  }
+}
+
+export async function fetchShipments(token?: string): Promise<Shipment[]> {
+  try {
+    await ensureAuth(token);
     return await dbService.getShipments();
   } catch (err) {
     console.error("Failed to fetch shipments", err);
@@ -23,12 +41,7 @@ export async function fetchShipments(token?: string): Promise<Shipment[]> {
 
 export async function fetchShipmentByOrderId(orderId: string, token?: string): Promise<Shipment | null> {
   try {
-    if (token && isSupabaseConfigured() && supabase) {
-      await supabase.auth.setSession({
-        access_token: token,
-        refresh_token: ""
-      });
-    }
+    await ensureAuth(token);
     return await dbService.getShipmentByOrderId(orderId);
   } catch (err) {
     console.error(`Failed to fetch shipment for order ${orderId}`, err);
@@ -41,12 +54,7 @@ export async function createNewShipment(
   token?: string
 ): Promise<{ success: boolean; shipment?: Shipment; error?: string }> {
   try {
-    if (token && isSupabaseConfigured() && supabase) {
-      await supabase.auth.setSession({
-        access_token: token,
-        refresh_token: ""
-      });
-    }
+    await ensureAuth(token);
     const data = await dbService.createShipment(shipment);
     
     // Trigger notification
@@ -74,12 +82,7 @@ export async function modifyShipment(
   token?: string
 ): Promise<{ success: boolean; shipment?: Shipment; error?: string }> {
   try {
-    if (token && isSupabaseConfigured() && supabase) {
-      await supabase.auth.setSession({
-        access_token: token,
-        refresh_token: ""
-      });
-    }
+    await ensureAuth(token);
     // Load current shipment state to fetch order info
     const shipments = await dbService.getShipments();
     const current = shipments.find(s => s.id === id);
@@ -109,12 +112,7 @@ export async function modifyShipment(
 
 export async function removeShipment(id: string, token?: string): Promise<{ success: boolean; error?: string }> {
   try {
-    if (token && isSupabaseConfigured() && supabase) {
-      await supabase.auth.setSession({
-        access_token: token,
-        refresh_token: ""
-      });
-    }
+    await ensureAuth(token);
     const success = await dbService.deleteShipment(id);
     revalidatePath("/admin/shipments");
     revalidatePath("/admin/orders");
