@@ -1651,27 +1651,9 @@ export const dbService = {
                 })
                 .eq("id", shp.id);
             }
-          } else {
-            // Auto-create shipment record since none exists
-            const tNumber = trackingNumber || currentOrder.tracking_number || `TEMP-${currentOrder.id.slice(-6).toUpperCase()}-${Date.now().toString().slice(-4)}`;
-            const initialTimeline = [{
-              status: mappedShipmentStatus,
-              timestamp: new Date().toISOString(),
-              action: `Shipment auto-created during order status transition to ${status}`,
-              user: executor
-            }];
-
-            await supabase
-              .from("shipments")
-              .insert([{
-                order_id: id,
-                tracking_number: tNumber,
-                courier_name: courierName || "Delhivery",
-                status: mappedShipmentStatus,
-                shipping_date: new Date().toISOString(),
-                timeline: initialTimeline
-              }]);
           }
+          // NOTE: If no shipment exists, we do NOT auto-create one here.
+          // Shipments should only be created from the Shipments tab.
         } catch (shpErr) {
           console.error("Failed to sync status update to shipments table:", shpErr);
         }
@@ -1799,25 +1781,9 @@ export const dbService = {
             action: `Shipment status updated to ${mappedShipmentStatus} via order state transition`,
             user: executor
           }];
-        } else {
-          const tNumber = trackingNumber || db.orders[idx].trackingNumber || `TEMP-${db.orders[idx].id.slice(-6).toUpperCase()}-${Date.now().toString().slice(-4)}`;
-          db.shipments.push({
-            id: `shp_${Date.now()}`,
-            orderId: id,
-            courierName: courierName || "Delhivery",
-            trackingNumber: tNumber,
-            status: mappedShipmentStatus,
-            shippingDate: new Date().toISOString(),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            timeline: [{
-              status: mappedShipmentStatus,
-              timestamp: new Date().toISOString(),
-              action: `Shipment auto-created during order status transition to ${status}`,
-              user: executor
-            }]
-          });
         }
+        // NOTE: If no shipment exists, we do NOT auto-create one here.
+        // Shipments should only be created from the Shipments tab.
       } else if (trackingNumber !== undefined && db.shipments) {
         const shpIdx = db.shipments.findIndex((s) => s.orderId === id);
         if (shpIdx !== -1) {
