@@ -24,11 +24,14 @@ async function ensureAuth(token?: string) {
     console.error("Failed to read server-side session cookies:", e);
   }
 
+  console.log("[orderActions] ensureAuth activeToken present:", !!activeToken, "refreshToken present:", !!refreshToken);
+
   if (activeToken) {
     // 1. Manually inject Bearer token into Postgrest headers for immediate database RLS bypass
     if ((supabase as any).rest) {
       try {
         (supabase as any).rest.headers.set("Authorization", `Bearer ${activeToken}`);
+        console.log("[orderActions] Injected Authorization header successfully");
       } catch (e) {
         console.error("Failed to inject Bearer token header:", e);
       }
@@ -36,13 +39,16 @@ async function ensureAuth(token?: string) {
     
     // 2. Set session on GoTrue client using access & refresh tokens
     try {
-      await supabase.auth.setSession({
+      const { data, error } = await supabase.auth.setSession({
         access_token: activeToken,
         refresh_token: refreshToken || activeToken
       });
+      console.log("[orderActions] setSession result - user:", data?.user?.email, "error:", error?.message);
     } catch (e) {
       console.error("Failed to set session on Supabase auth client:", e);
     }
+  } else {
+    console.warn("[orderActions] ensureAuth called but no activeToken was found!");
   }
 }
 
