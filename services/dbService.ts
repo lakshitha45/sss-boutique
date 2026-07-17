@@ -2570,10 +2570,18 @@ export const dbService = {
     }];
 
     // Determine corresponding Order status mapping
-    let orderStatusValue = "shipped";
-    if (shipment.status === "Delivered") orderStatusValue = "delivered";
-    else if (shipment.status === "Cancelled" || shipment.status === "Returned") orderStatusValue = "cancelled";
-    else if (shipment.status === "Packed" || shipment.status === "Ready For Pickup") orderStatusValue = "packed";
+    let orderStatusValue = "packed";
+    let orderStatusLabel = "Packed";
+    if (shipment.status === "In Transit") {
+      orderStatusValue = "shipped";
+      orderStatusLabel = "Shipped";
+    } else if (shipment.status === "Delivered") {
+      orderStatusValue = "delivered";
+      orderStatusLabel = "Delivered";
+    } else if (shipment.status === "Cancelled") {
+      orderStatusValue = "cancelled";
+      orderStatusLabel = "Cancelled";
+    }
 
     if (isSupabaseConfigured() && supabase) {
       const basePayload = {
@@ -2615,7 +2623,7 @@ export const dbService = {
         // Update Order tracking and status history
         const { data: ord } = await supabase.from("orders").select("status_history").eq("id", shipment.orderId).single();
         const updatedHistory = [...(ord?.status_history || []), {
-          status: orderStatusValue === "shipped" ? "Shipped" : (orderStatusValue === "delivered" ? "Delivered" : "Cancelled"),
+          status: orderStatusLabel,
           timestamp,
           user: "admin",
           action: `Shipment created. Carrier: ${shipment.courierName}, Tracking: ${shipment.trackingNumber}`
@@ -2811,14 +2819,22 @@ export const dbService = {
 
       // Sync Order Status
       if (updates.status) {
-        let orderStatusValue = "shipped";
-        if (updates.status === "Delivered") orderStatusValue = "delivered";
-        else if (updates.status === "Cancelled" || updates.status === "Returned") orderStatusValue = "cancelled";
-        else if (updates.status === "Packed" || updates.status === "Ready For Pickup") orderStatusValue = "packed";
+        let orderStatusValue = "packed";
+        let orderStatusLabel = "Packed";
+        if (updates.status === "In Transit") {
+          orderStatusValue = "shipped";
+          orderStatusLabel = "Shipped";
+        } else if (updates.status === "Delivered") {
+          orderStatusValue = "delivered";
+          orderStatusLabel = "Delivered";
+        } else if (updates.status === "Cancelled") {
+          orderStatusValue = "cancelled";
+          orderStatusLabel = "Cancelled";
+        }
 
         const { data: ord } = await supabase.from("orders").select("status_history").eq("id", current.order_id).single();
         const updatedHistory = [...(ord?.status_history || []), {
-          status: orderStatusValue === "shipped" ? "Shipped" : (orderStatusValue === "delivered" ? "Delivered" : "Cancelled"),
+          status: orderStatusLabel,
           timestamp,
           user: "admin",
           action: `Shipment status transition to ${updates.status}`

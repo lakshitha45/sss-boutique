@@ -12,15 +12,9 @@ import { supabase } from "@/lib/supabase";
 const COURIER_OPTIONS = ["Professional Couriers", "DTDC", "Blue Dart", "Delhivery", "India Post", "Other"];
 
 const STATUS_OPTIONS = [
-  "Shipment Pending",
   "Packed",
-  "Ready For Pickup",
-  "Picked Up",
   "In Transit",
-  "Out For Delivery",
   "Delivered",
-  "Delivery Failed",
-  "Returned",
   "Cancelled"
 ];
 
@@ -45,7 +39,7 @@ export default function AdminShipmentDashboard() {
   const [selectedCourier, setSelectedCourier] = useState(COURIER_OPTIONS[0]);
   const [customCourierName, setCustomCourierName] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
-  const [shipmentStatus, setShipmentStatus] = useState("Shipment Pending");
+  const [shipmentStatus, setShipmentStatus] = useState("Packed");
   const [notes, setNotes] = useState("");
   const [estDeliveryDate, setEstDeliveryDate] = useState("");
 
@@ -145,11 +139,10 @@ export default function AdminShipmentDashboard() {
   };
 
   // Metrics
-  const pendingCount = shipments.filter(s => s.status === "Shipment Pending" || s.status === "Packed" || s.status === "Ready For Pickup").length;
-  const shippedCount = shipments.filter(s => s.status === "Picked Up" || s.status === "In Transit" || s.status === "Out For Delivery").length;
+  const pendingCount = shipments.filter(s => s.status === "Packed" || s.status === "Shipment Pending" || s.status === "Ready For Pickup").length;
+  const shippedCount = shipments.filter(s => s.status === "In Transit" || s.status === "Picked Up" || s.status === "Out For Delivery").length;
   const deliveredCount = shipments.filter(s => s.status === "Delivered").length;
-  const cancelledCount = shipments.filter(s => s.status === "Cancelled").length;
-  const returnedCount = shipments.filter(s => s.status === "Returned").length;
+  const cancelledCount = shipments.filter(s => s.status === "Cancelled" || s.status === "Returned").length;
 
   // Filtered list
   const filteredShipments = shipments.filter(s => {
@@ -199,12 +192,11 @@ export default function AdminShipmentDashboard() {
       </div>
 
       {/* METRIC CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Pending Shipments", count: pendingCount, color: "text-amber-400" },
           { label: "Shipped Orders", count: shippedCount, color: "text-indigo-400" },
           { label: "Delivered Orders", count: deliveredCount, color: "text-emerald-400" },
-          { label: "Returned Shipments", count: returnedCount, color: "text-zinc-400" },
           { label: "Cancelled Shipments", count: cancelledCount, color: "text-rose-455" }
         ].map((c, i) => (
           <div key={i} className="bg-[#121212] border border-[#1C1C1C] p-4 space-y-2">
