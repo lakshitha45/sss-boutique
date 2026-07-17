@@ -11,16 +11,11 @@ import { Search, AlertCircle, Edit2, Check, Printer, FileText, MapPin, Phone, Us
 
 const ALL_STATUSES = [
   "Pending Payment",
-  "Payment Received",
   "Order Confirmed",
-  "Processing",
   "Packed",
-  "Ready For Shipment",
   "Shipped",
   "Delivered",
-  "Cancelled",
-  "Returned",
-  "Refunded"
+  "Cancelled"
 ];
 
 const PAYMENT_STATUSES = [
@@ -401,7 +396,7 @@ export default function OrderManagementPage() {
                           No shipment assigned yet.
                         </span>
                         <span className="text-[9px] text-zinc-600 block">
-                          Transition this order to "Packed" or "Ready For Shipment" to create a shipment.
+                          Transition this order to "Packed" to create a shipment.
                         </span>
                       </div>
                     );

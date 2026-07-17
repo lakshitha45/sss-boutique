@@ -1240,9 +1240,8 @@ export const dbService = {
           o.order_status === "cancelled" ? "Cancelled" :
           o.order_status === "delivered" ? "Delivered" :
           o.order_status === "shipped" ? "Shipped" :
-          o.order_status === "packed" ? (o.tracking_number ? "Ready For Shipment" : "Packed") :
-          o.order_status === "confirmed" ? "Order Confirmed" :
-          o.payment_status === "paid" ? "Payment Received" : "Pending Payment",
+          o.order_status === "packed" ? "Packed" :
+          o.order_status === "confirmed" ? "Order Confirmed" : "Pending Payment",
         shippingAddress: o.shipping_address,
         trackingNumber: o.tracking_number,
         orderNotes: o.order_notes || undefined,
@@ -1532,8 +1531,6 @@ export const dbService = {
     let mappedShipmentStatus: string | null = null;
     if (status === "Packed") {
       mappedShipmentStatus = "Packed";
-    } else if (status === "Ready For Shipment") {
-      mappedShipmentStatus = "Ready For Pickup";
     } else if (status === "Shipped") {
       mappedShipmentStatus = "In Transit";
     } else if (status === "Delivered") {
@@ -1566,16 +1563,10 @@ export const dbService = {
       if (status === "Pending Payment") {
         mappedOrderStatus = "pending";
         mappedPaymentStatus = "pending";
-      } else if (status === "Payment Received") {
-        mappedOrderStatus = "confirmed";
-        mappedPaymentStatus = "paid";
-      } else if (status === "Order Confirmed" || status === "Processing") {
+      } else if (status === "Order Confirmed") {
         mappedOrderStatus = "confirmed";
         mappedPaymentStatus = "paid";
       } else if (status === "Packed") {
-        mappedOrderStatus = "packed";
-        mappedPaymentStatus = "paid";
-      } else if (status === "Ready For Shipment") {
         mappedOrderStatus = "packed";
         mappedPaymentStatus = "paid";
       } else if (status === "Shipped") {
@@ -1585,8 +1576,6 @@ export const dbService = {
         mappedOrderStatus = "delivered";
         mappedPaymentStatus = "paid";
       } else if (status === "Cancelled") {
-        mappedOrderStatus = "cancelled";
-      } else if (status === "Returned" || status === "Refunded") {
         mappedOrderStatus = "cancelled";
         mappedPaymentStatus = "refunded";
       }
@@ -1800,10 +1789,27 @@ export const dbService = {
       };
       const updatedHistory = [...history, newEvent];
 
-      const isCancellation = status.toLowerCase() === "cancelled" || status.toLowerCase() === "returned" || status.toLowerCase() === "refunded";
-      const wasCancelled = previousStatus.toLowerCase() === "cancelled" || previousStatus.toLowerCase() === "returned" || previousStatus.toLowerCase() === "refunded";
+      const isDeducted = (s: string) => ["packed", "shipped", "delivered"].includes(s.toLowerCase());
+      const prevDeducted = isDeducted(previousStatus);
+      const newDeducted = isDeducted(status);
 
-      if (isCancellation && !wasCancelled) {
+      if (!prevDeducted && newDeducted) {
+        // Transitioned to packed/shipped/delivered -> Deduct Stock!
+        currentOrder.items.forEach((item) => {
+          const vRec = db.product_variants.find(
+            (v) => v.productId === item.productId && v.size === item.variantSize
+          );
+          if (vRec) {
+            vRec.stock = Math.max(0, vRec.stock - item.quantity);
+          }
+          const prod = db.products.find((p) => p.id === item.productId);
+          if (prod) {
+            const prodVariants = db.product_variants.filter((v) => v.productId === item.productId);
+            prod.stock = prodVariants.reduce((sum, v) => sum + v.stock, 0);
+          }
+        });
+      } else if (prevDeducted && !newDeducted) {
+        // Transitioned out of packed/shipped/delivered (e.g. cancelled) -> Restore Stock!
         currentOrder.items.forEach((item) => {
           const vRec = db.product_variants.find(
             (v) => v.productId === item.productId && v.size === item.variantSize
@@ -1817,7 +1823,9 @@ export const dbService = {
             prod.stock = prodVariants.reduce((sum, v) => sum + v.stock, 0);
           }
         });
+      }
 
+      if (status.toLowerCase() === "cancelled" && previousStatus.toLowerCase() !== "cancelled") {
         db.notifications.push({
           id: `notif_${Date.now()}`,
           type: "order_cancelled",
@@ -1840,7 +1848,7 @@ export const dbService = {
       db.orders[idx].orderStatus = status;
       db.orders[idx].statusHistory = updatedHistory;
       if (trackingNumber !== undefined) db.orders[idx].trackingNumber = trackingNumber;
-      if (status === "Delivered" || status === "Shipped" || status === "Ready For Shipment" || status === "Packed" || status === "Order Confirmed" || status === "Processing") {
+      if (status === "Delivered" || status === "Shipped" || status === "Packed" || status === "Order Confirmed") {
         db.orders[idx].paymentStatus = "paid";
       }
 

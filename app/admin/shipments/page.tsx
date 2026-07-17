@@ -376,7 +376,7 @@ export default function AdminShipmentDashboard() {
                       const s = o.orderStatus.toLowerCase();
                       const hasShipment = shipments.some(shp => shp.orderId === o.id);
                       if (hasShipment) return false;
-                      return s === "packed" || s === "ready for shipment" || s === "order confirmed" || s === "payment received" || s === "pending payment" || s === "processing";
+                      return s === "packed";
                     }).map((o) => (
                       <option key={o.id} value={o.id}>
                         {o.orderNumber || o.id.slice(-6).toUpperCase()} - {o.customerName} ({formatPrice(o.grandTotal)})
