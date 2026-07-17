@@ -413,10 +413,12 @@ export default function ProductDetailClient({ product, categoryName, allProducts
                 className="group space-y-3 font-poppins text-xs block"
               >
                 <div className="relative aspect-[3/4] overflow-hidden bg-zinc-50 border border-zinc-100">
-                  <img
-                    src={prod.images[0]?.imageUrl}
+                  <Image
+                    src={prod.images[0]?.imageUrl || "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=800&auto=format&fit=crop"}
                     alt={prod.name}
-                    className="object-cover w-full h-full group-hover:scale-102 transition-transform duration-500"
+                    fill
+                    sizes="(max-width: 768px) 50vw, 25vw"
+                    className="object-cover group-hover:scale-102 transition-transform duration-500"
                   />
                 </div>
                 <div className="space-y-0.5">

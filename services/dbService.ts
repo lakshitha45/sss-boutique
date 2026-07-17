@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { perfLog } from "@/lib/perfLogger";
 import { Product, Category, ProductImage, ProductVariant, Order, UserProfile, ActivityLog, Address, Notification, Shipment, NotificationLog, NotificationPreferences, NotificationType, NotificationChannel, HomepageBanner, Coupon, GstLog } from "@/types";
 
 const MOCK_DB_DIR = path.join(process.cwd(), "data");
@@ -351,31 +352,41 @@ export const dbService = {
 
   // --- CATEGORIES ---
   async getCategories(): Promise<Category[]> {
-    if (isSupabaseConfigured() && supabase) {
-      const { data, error } = await supabase.from("categories").select("*");
-      if (error) throw error;
-      return (data || []).map((c: any) => ({
-        id: c.id,
-        name: c.name,
-        slug: c.slug,
-        description: c.description,
-        bannerImage: c.banner_image,
-        imageUrl: c.banner_image, // alias
-        isFeatured: c.is_featured,
-        active: c.active !== undefined ? c.active : true,
-        displayOrder: c.display_order || 0,
-        metaTitle: c.meta_title || undefined,
-        metaDescription: c.meta_description || undefined,
-        createdAt: c.created_at,
-        updatedAt: c.updated_at,
-      }));
-    } else {
-      const db = initMockDb();
-      return db.categories.map((c) => ({
-        ...c,
-        imageUrl: c.bannerImage, // alias
-        active: c.active !== undefined ? c.active : true,
-      }));
+    const startTime = Date.now();
+    try {
+      if (isSupabaseConfigured() && supabase) {
+        const { data, error } = await supabase.from("categories").select("*");
+        if (error) throw error;
+        const result = (data || []).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          description: c.description,
+          bannerImage: c.banner_image,
+          imageUrl: c.banner_image, // alias
+          isFeatured: c.is_featured,
+          active: c.active !== undefined ? c.active : true,
+          displayOrder: c.display_order || 0,
+          metaTitle: c.meta_title || undefined,
+          metaDescription: c.meta_description || undefined,
+          createdAt: c.created_at,
+          updatedAt: c.updated_at,
+        }));
+        perfLog("getCategories", startTime, true);
+        return result;
+      } else {
+        const db = initMockDb();
+        const result = db.categories.map((c) => ({
+          ...c,
+          imageUrl: c.bannerImage, // alias
+          active: c.active !== undefined ? c.active : true,
+        }));
+        perfLog("getCategories (Mock)", startTime, true);
+        return result;
+      }
+    } catch (err) {
+      perfLog("getCategories", startTime, false, err);
+      return SEED_CATEGORIES;
     }
   },
 
@@ -562,72 +573,172 @@ export const dbService = {
 
   // --- PRODUCTS ---
   async getProducts(includeInactive = false): Promise<Product[]> {
-    if (isSupabaseConfigured() && supabase) {
-      let query = supabase.from("products").select("*, product_images(*), product_variants(*)");
-      if (!includeInactive) {
-        query = query.eq("active", true);
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      
-      return (data || []).map((p: any) => ({
-        id: p.id,
-        categoryId: p.category_id,
-        productName: p.product_name,
-        name: p.product_name, // alias
-        slug: p.slug,
-        description: p.description,
-        shortDescription: p.short_description,
-        price: Number(p.price),
-        discountPrice: p.discount_price ? Number(p.discount_price) : undefined,
-        compareAtPrice: p.discount_price ? Number(p.discount_price) : undefined, // alias
-        stock: p.stock,
-        inventory: p.stock, // alias
-        sku: p.sku,
-        metadata: {
-          material: p.material,
-          care: p.care_instructions,
-          sizes: (p.product_variants || []).map((v: any) => v.size),
-          colors: [],
-        },
-        material: p.material,
-        brand: p.brand,
-        careInstructions: p.care_instructions,
-        care: p.care_instructions, // alias
-        featured: p.featured,
-        active: p.active,
-        metaTitle: p.meta_title || undefined,
-        metaDescription: p.meta_description || undefined,
-        taxInclusive: p.tax_inclusive || false,
-        createdAt: p.created_at,
-        updatedAt: p.updated_at,
-        images: (p.product_images || []).map((img: any) => ({
-          id: img.id,
-          productId: img.product_id,
-          imageUrl: img.image_url,
-          displayOrder: img.display_order,
-          altText: img.alt_text,
-          isPrimary: img.is_primary,
-        })),
-        variants: (p.product_variants || []).map((v: any) => ({
-          id: v.id,
-          productId: v.product_id,
-          size: v.size,
-          stock: v.stock,
-          sku: v.sku,
-        })),
-      }));
-    } else {
-      const db = initMockDb();
-      const rawProducts = includeInactive ? db.products : db.products.filter((p) => p.active);
-      
-      return rawProducts.map((p) => {
-        const images = db.product_images
-          .filter((img) => img.productId === p.id)
-          .sort((a, b) => a.displayOrder - b.displayOrder);
-        const variants = db.product_variants.filter((v) => v.productId === p.id);
+    const startTime = Date.now();
+    try {
+      if (isSupabaseConfigured() && supabase) {
+        let query = supabase.from("products").select("*, product_images(*), product_variants(*)");
+        if (!includeInactive) {
+          query = query.eq("active", true);
+        }
+        const { data, error } = await query;
+        if (error) throw error;
         
-        return {
+        const result = (data || []).map((p: any) => ({
+          id: p.id,
+          categoryId: p.category_id,
+          productName: p.product_name,
+          name: p.product_name, // alias
+          slug: p.slug,
+          description: p.description,
+          shortDescription: p.short_description,
+          price: Number(p.price),
+          discountPrice: p.discount_price ? Number(p.discount_price) : undefined,
+          compareAtPrice: p.discount_price ? Number(p.discount_price) : undefined, // alias
+          stock: p.stock,
+          inventory: p.stock, // alias
+          sku: p.sku,
+          metadata: {
+            material: p.material,
+            care: p.care_instructions,
+            sizes: (p.product_variants || []).map((v: any) => v.size),
+            colors: [],
+          },
+          material: p.material,
+          brand: p.brand,
+          careInstructions: p.care_instructions,
+          care: p.care_instructions, // alias
+          featured: p.featured,
+          active: p.active,
+          metaTitle: p.meta_title || undefined,
+          metaDescription: p.meta_description || undefined,
+          taxInclusive: p.tax_inclusive || false,
+          createdAt: p.created_at,
+          updatedAt: p.updated_at,
+          images: (p.product_images || []).map((img: any) => ({
+            id: img.id,
+            productId: img.product_id,
+            imageUrl: img.image_url,
+            displayOrder: img.display_order,
+            altText: img.alt_text,
+            isPrimary: img.is_primary,
+          })),
+          variants: (p.product_variants || []).map((v: any) => ({
+            id: v.id,
+            productId: v.product_id,
+            size: v.size,
+            stock: v.stock,
+            sku: v.sku,
+          })),
+        }));
+        perfLog("getProducts", startTime, true);
+        return result;
+      } else {
+        const db = initMockDb();
+        const rawProducts = includeInactive ? db.products : db.products.filter((p) => p.active);
+        
+        const result = rawProducts.map((p) => {
+          const images = db.product_images
+            .filter((img) => img.productId === p.id)
+            .sort((a, b) => a.displayOrder - b.displayOrder);
+          const variants = db.product_variants.filter((v) => v.productId === p.id);
+          
+          return {
+            ...p,
+            name: p.productName, // alias
+            compareAtPrice: p.discountPrice, // alias
+            care: p.careInstructions, // alias
+            inventory: p.stock, // alias
+            metadata: {
+              material: p.material,
+              care: p.careInstructions,
+              sizes: variants.map((v) => v.size),
+              colors: [],
+            },
+            metaTitle: (p as any).metaTitle || p.productName,
+            metaDescription: (p as any).metaDescription || p.description,
+            images,
+            variants,
+          } as Product;
+        });
+        perfLog("getProducts (Mock)", startTime, true);
+        return result;
+      }
+    } catch (err) {
+      perfLog("getProducts", startTime, false, err);
+      return [];
+    }
+  },
+
+  async getProductBySlug(slug: string): Promise<Product | null> {
+    const startTime = Date.now();
+    try {
+      if (isSupabaseConfigured() && supabase) {
+        const { data, error } = await supabase
+          .from("products")
+          .select("*, product_images(*), product_variants(*)")
+          .eq("slug", slug)
+          .maybeSingle();
+        if (error) throw error;
+        if (!data) return null;
+
+        const result = {
+          id: data.id,
+          categoryId: data.category_id,
+          productName: data.product_name,
+          name: data.product_name, // alias
+          slug: data.slug,
+          description: data.description,
+          shortDescription: data.short_description,
+          price: Number(data.price),
+          discountPrice: data.discount_price ? Number(data.discount_price) : undefined,
+          compareAtPrice: data.discount_price ? Number(data.discount_price) : undefined, // alias
+          stock: data.stock,
+          inventory: data.stock, // alias
+          sku: data.sku,
+          metadata: {
+            material: data.material,
+            care: data.care_instructions,
+            sizes: (data.product_variants || []).map((v: any) => v.size),
+            colors: [],
+          },
+          material: data.material,
+          brand: data.brand,
+          careInstructions: data.care_instructions,
+          care: data.care_instructions, // alias
+          featured: data.featured,
+          active: data.active,
+          metaTitle: data.meta_title || undefined,
+          metaDescription: data.meta_description || undefined,
+          taxInclusive: data.tax_inclusive || false,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at,
+          images: (data.product_images || []).map((img: any) => ({
+            id: img.id,
+            productId: img.product_id,
+            imageUrl: img.image_url,
+            displayOrder: img.display_order,
+            altText: img.alt_text,
+            isPrimary: img.is_primary,
+          })),
+          variants: (data.product_variants || []).map((v: any) => ({
+            id: v.id,
+            productId: v.product_id,
+            size: v.size,
+            stock: v.stock,
+            sku: v.sku,
+          })),
+        };
+        perfLog("getProductBySlug", startTime, true);
+        return result;
+      } else {
+        const db = initMockDb();
+        const p = db.products.find((prod) => prod.slug === slug);
+        if (!p) return null;
+
+        const images = db.product_images.filter((img) => img.productId === p.id).sort((a, b) => a.displayOrder - b.displayOrder);
+        const variants = db.product_variants.filter((v) => v.productId === p.id);
+
+        const result = {
           ...p,
           name: p.productName, // alias
           compareAtPrice: p.discountPrice, // alias
@@ -639,95 +750,15 @@ export const dbService = {
             sizes: variants.map((v) => v.size),
             colors: [],
           },
-          metaTitle: (p as any).metaTitle || p.productName,
-          metaDescription: (p as any).metaDescription || p.description,
           images,
           variants,
         } as Product;
-      });
-    }
-  },
-
-  async getProductBySlug(slug: string): Promise<Product | null> {
-    if (isSupabaseConfigured() && supabase) {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*, product_images(*), product_variants(*)")
-        .eq("slug", slug)
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) return null;
-
-      return {
-        id: data.id,
-        categoryId: data.category_id,
-        productName: data.product_name,
-        name: data.product_name, // alias
-        slug: data.slug,
-        description: data.description,
-        shortDescription: data.short_description,
-        price: Number(data.price),
-        discountPrice: data.discount_price ? Number(data.discount_price) : undefined,
-        compareAtPrice: data.discount_price ? Number(data.discount_price) : undefined, // alias
-        stock: data.stock,
-        inventory: data.stock, // alias
-        sku: data.sku,
-        metadata: {
-          material: data.material,
-          care: data.care_instructions,
-          sizes: (data.product_variants || []).map((v: any) => v.size),
-          colors: [],
-        },
-        material: data.material,
-        brand: data.brand,
-        careInstructions: data.care_instructions,
-        care: data.care_instructions, // alias
-        featured: data.featured,
-        active: data.active,
-        metaTitle: data.meta_title || undefined,
-        metaDescription: data.meta_description || undefined,
-        taxInclusive: data.tax_inclusive || false,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-        images: (data.product_images || []).map((img: any) => ({
-          id: img.id,
-          productId: img.product_id,
-          imageUrl: img.image_url,
-          displayOrder: img.display_order,
-          altText: img.alt_text,
-          isPrimary: img.is_primary,
-        })),
-        variants: (data.product_variants || []).map((v: any) => ({
-          id: v.id,
-          productId: v.product_id,
-          size: v.size,
-          stock: v.stock,
-          sku: v.sku,
-        })),
-      };
-    } else {
-      const db = initMockDb();
-      const p = db.products.find((prod) => prod.slug === slug);
-      if (!p) return null;
-
-      const images = db.product_images.filter((img) => img.productId === p.id).sort((a, b) => a.displayOrder - b.displayOrder);
-      const variants = db.product_variants.filter((v) => v.productId === p.id);
-
-      return {
-        ...p,
-        name: p.productName, // alias
-        compareAtPrice: p.discountPrice, // alias
-        care: p.careInstructions, // alias
-        inventory: p.stock, // alias
-        metadata: {
-          material: p.material,
-          care: p.careInstructions,
-          sizes: variants.map((v) => v.size),
-          colors: [],
-        },
-        images,
-        variants,
-      } as Product;
+        perfLog("getProductBySlug (Mock)", startTime, true);
+        return result;
+      }
+    } catch (err) {
+      perfLog("getProductBySlug", startTime, false, err);
+      return null;
     }
   },
 

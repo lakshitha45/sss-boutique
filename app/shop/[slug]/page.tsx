@@ -4,13 +4,31 @@ import { notFound } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { dbService } from "@/services/dbService";
-import { formatPrice } from "@/utils";
 import ProductDetailClient from "./ProductDetailClient";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { ProductCard } from "@/components";
+
+import { Product, Category } from "@/types";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+}
+
+// Incremental Static Regeneration (ISR) - regenerate page at most every 60 seconds
+export const revalidate = 60;
+
+// Pre-generate static product paths at build time
+export async function generateStaticParams() {
+  try {
+    const products = await dbService.getProducts();
+    return products.map((product) => ({
+      slug: product.slug,
+    }));
+  } catch (err) {
+    console.error("[PERF] generateStaticParams failed:", err);
+    return [];
+  }
 }
 
 // Generate Dynamic SEO Metadata
@@ -44,21 +62,34 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ProductDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const product = await dbService.getProductBySlug(slug);
+  let product = null;
+  
+  try {
+    product = await dbService.getProductBySlug(slug);
+  } catch (err) {
+    console.error(`[PERF] ProductDetailPage fetch product by slug failed:`, err);
+  }
 
   if (!product) {
     notFound();
   }
 
-  // Fetch recommendations (same category, excluding current product)
-  const allProducts = await dbService.getProducts();
-  const recommendations = allProducts
-    .filter((p) => p.categoryId === product.categoryId && p.id !== product.id)
-    .slice(0, 3);
+  let recommendations: Product[] = [];
+  let category: Category | undefined = undefined;
+  
+  try {
+    // Fetch recommendations (same category, excluding current product)
+    const allProducts = await dbService.getProducts();
+    recommendations = allProducts
+      .filter((p) => p.categoryId === product.categoryId && p.id !== product.id)
+      .slice(0, 3);
 
-  // Fetch category name
-  const categories = await dbService.getCategories();
-  const category = categories.find((c) => c.id === product.categoryId);
+    // Fetch category name
+    const categories = await dbService.getCategories();
+    category = categories.find((c) => c.id === product.categoryId);
+  } catch (err) {
+    console.error("[PERF] Recommendations / Category fetch failed:", err);
+  }
 
   return (
     <>
@@ -84,7 +115,11 @@ export default async function ProductDetailPage({ params }: PageProps) {
           </nav>
 
           {/* Interactive Client Section */}
-          <ProductDetailClient product={product} categoryName={category?.name || "Luxury Edit"} allProducts={allProducts} />
+          <ProductDetailClient 
+            product={product} 
+            categoryName={category?.name || "Luxury Edit"} 
+            allProducts={recommendations} 
+          />
 
           {/* RECOMMENDATIONS SECTION */}
           {recommendations.length > 0 && (
@@ -101,35 +136,12 @@ export default async function ProductDetailPage({ params }: PageProps) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                 {recommendations.map((prod) => (
-                  <div key={prod.id} className="group space-y-4 font-poppins">
-                    <div className="relative aspect-[3/4] overflow-hidden bg-zinc-50 border border-zinc-100">
-                      <img
-                        src={prod.images[0]?.imageUrl || "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=800&auto=format&fit=crop"}
-                        alt={prod.name}
-                        className="object-cover w-full h-full group-hover:scale-102 transition-transform duration-700 ease-out"
-                      />
-                      <div className="absolute inset-0 bg-zinc-950/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-4">
-                        <Link
-                          href={`/shop/${prod.slug}`}
-                          className="bg-white text-zinc-950 px-5 py-2.5 text-[9px] tracking-widest uppercase hover:bg-primary hover:text-white transition duration-300 font-bold"
-                        >
-                          View Details
-                        </Link>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1 text-center">
-                      <span className="text-[9px] text-zinc-400 tracking-widest uppercase block">
-                        {category?.name || "Luxury Edit"}
-                      </span>
-                      <h3 className="font-serif text-sm font-medium tracking-wide text-foreground">
-                        <Link href={`/shop/${prod.slug}`} className="hover:text-primary transition">
-                          {prod.name}
-                        </Link>
-                      </h3>
-                      <span className="font-semibold text-xs block">{formatPrice(prod.price)}</span>
-                    </div>
-                  </div>
+                  <ProductCard
+                    key={prod.id}
+                    product={prod}
+                    categoryName={category?.name || "Luxury Edit"}
+                    variant="minimal"
+                  />
                 ))}
               </div>
             </section>
