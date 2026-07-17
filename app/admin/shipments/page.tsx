@@ -6,7 +6,7 @@ import { fetchOrders } from "@/features/orders/orderActions";
 import { Shipment, Order } from "@/types";
 import { formatPrice } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, AlertCircle, Edit2, Trash2, Check, Truck, Clock, Eye, Calendar, User, Phone, MapPin, X, ArrowUpDown, Filter, Plus } from "lucide-react";
+import { Search, AlertCircle, Edit2, Trash2, Check, Truck, Clock, Eye, Calendar as CalendarIcon, User, Phone, MapPin, X, ArrowUpDown, Filter, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 const COURIER_OPTIONS = ["Professional Couriers", "DTDC", "Blue Dart", "Delhivery", "India Post", "Other"];
@@ -496,12 +496,16 @@ export default function AdminShipmentDashboard() {
 
                   <div className="space-y-1">
                     <label className="text-[9px] text-zinc-500 uppercase tracking-widest block font-bold">Estimated Delivery</label>
-                    <input
-                      type="date"
-                      value={estDeliveryDate}
-                      onChange={(e) => setEstDeliveryDate(e.target.value)}
-                      className="w-full bg-[#0A0A0A] border border-[#1C1C1C] px-3 py-2 text-white focus:outline-none focus:border-accent"
-                    />
+                    <div className="relative">
+                      <input
+                        type="date"
+                        value={estDeliveryDate}
+                        onChange={(e) => setEstDeliveryDate(e.target.value)}
+                        min={new Date().toISOString().split("T")[0]}
+                        className="w-full bg-[#0A0A0A] border border-[#1C1C1C] px-3 py-2 pl-9 text-white focus:outline-none focus:border-accent [color-scheme:dark] cursor-pointer"
+                      />
+                      <CalendarIcon className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5 pointer-events-none" />
+                    </div>
                   </div>
                 </div>
 
@@ -597,12 +601,16 @@ export default function AdminShipmentDashboard() {
 
                   <div className="space-y-1">
                     <label className="text-[9px] text-zinc-500 uppercase tracking-widest block font-bold">Estimated Delivery</label>
-                    <input
-                      type="date"
-                      value={editEstDate}
-                      onChange={(e) => setEditEstDate(e.target.value)}
-                      className="w-full bg-[#0A0A0A] border border-[#1C1C1C] px-3 py-2 text-white focus:outline-none focus:border-accent"
-                    />
+                    <div className="relative">
+                      <input
+                        type="date"
+                        value={editEstDate}
+                        onChange={(e) => setEditEstDate(e.target.value)}
+                        min={new Date().toISOString().split("T")[0]}
+                        className="w-full bg-[#0A0A0A] border border-[#1C1C1C] px-3 py-2 pl-9 text-white focus:outline-none focus:border-accent [color-scheme:dark] cursor-pointer"
+                      />
+                      <CalendarIcon className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5 pointer-events-none" />
+                    </div>
                   </div>
                 </div>
 
