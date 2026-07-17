@@ -394,6 +394,7 @@ export interface Shipment {
   timeline: ShipmentTimelineItem[];
   createdAt: string;
   updatedAt: string;
+  isVirtual?: boolean;
 }
 
 export interface GstLog {

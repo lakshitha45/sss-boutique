@@ -1716,44 +1716,6 @@ export const dbService = {
                 })
                 .eq("id", shp.id);
             }
-          } else if (status === "Packed") {
-            // Auto-create shipment when order transitions to Packed
-            const tempTracking = `PENDING-${data.order_number || id.slice(-6).toUpperCase()}`;
-            const timestamp = new Date().toISOString();
-            const initialTimeline = [{
-              status: "Packed",
-              timestamp,
-              action: `Shipment automatically created on order Packed transition`,
-              user: executor
-            }];
-
-            try {
-              await supabase
-                .from("shipments")
-                .insert([{
-                  order_id: id,
-                  tracking_number: tempTracking,
-                  status: "Packed",
-                  courier_name: "Delhivery",
-                  shipping_date: timestamp,
-                  timeline: initialTimeline
-                }]);
-            } catch (insErr: any) {
-              if (insErr.code === "42703" || (insErr.message && insErr.message.toLowerCase().includes("column"))) {
-                // Table might use 'carrier' column in phase 6 schema instead of 'courier_name'
-                await supabase
-                  .from("shipments")
-                  .insert([{
-                    order_id: id,
-                    tracking_number: tempTracking,
-                    status: "Packed",
-                    carrier: "Delhivery",
-                    timeline: initialTimeline
-                  }]);
-              } else {
-                throw insErr;
-              }
-            }
           }
         } catch (shpErr) {
           console.error("Failed to sync status update to shipments table:", shpErr);
@@ -1901,25 +1863,6 @@ export const dbService = {
             action: `Shipment status updated to ${mappedShipmentStatus} via order state transition`,
             user: executor
           }];
-        } else if (status === "Packed") {
-          // Auto-create shipment when order transitions to Packed
-          const tempTracking = `PENDING-${currentOrder.orderNumber || id.slice(-6).toUpperCase()}`;
-          const timestamp = new Date().toISOString();
-          db.shipments.push({
-            id: `shp_${Date.now()}`,
-            orderId: id,
-            courierName: "Delhivery",
-            trackingNumber: tempTracking,
-            status: "Packed",
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            timeline: [{
-              status: "Packed",
-              timestamp,
-              action: `Shipment automatically created on order Packed transition`,
-              user: executor
-            }]
-          });
         }
       } else if (trackingNumber !== undefined && db.shipments) {
         const shpIdx = db.shipments.findIndex((s) => s.orderId === id);

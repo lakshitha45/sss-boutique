@@ -110,19 +110,38 @@ export default function AdminShipmentDashboard() {
     if (!editingShipment) return;
     const finalCourier = editCourier === "Other" ? editCustomCourier : editCourier;
     const token = await getAuthToken();
-    const res = await modifyShipment(editingShipment.id, {
-      courierName: finalCourier || "Other",
-      trackingNumber: editTracking,
-      status: editStatus,
-      estimatedDeliveryDate: editEstDate || undefined,
-      notes: editNotes
-    }, token);
 
-    if (res.success) {
-      setEditingShipment(null);
-      loadData();
+    if (editingShipment.isVirtual) {
+      const res = await createNewShipment({
+        orderId: editingShipment.orderId,
+        courierName: finalCourier || "Other",
+        trackingNumber: editTracking,
+        status: editStatus,
+        notes: editNotes,
+        estimatedDeliveryDate: editEstDate || undefined
+      }, token);
+
+      if (res.success) {
+        setEditingShipment(null);
+        loadData();
+      } else {
+        alert(res.error || "Failed to assign shipment details");
+      }
     } else {
-      alert(res.error || "Failed to update shipment");
+      const res = await modifyShipment(editingShipment.id, {
+        courierName: finalCourier || "Other",
+        trackingNumber: editTracking,
+        status: editStatus,
+        estimatedDeliveryDate: editEstDate || undefined,
+        notes: editNotes
+      }, token);
+
+      if (res.success) {
+        setEditingShipment(null);
+        loadData();
+      } else {
+        alert(res.error || "Failed to update shipment");
+      }
     }
   };
 
@@ -138,14 +157,41 @@ export default function AdminShipmentDashboard() {
     }
   };
 
-  // Metrics
-  const pendingCount = shipments.filter(s => s.status === "Packed" || s.status === "Shipment Pending" || s.status === "Ready For Pickup").length;
-  const shippedCount = shipments.filter(s => s.status === "In Transit" || s.status === "Picked Up" || s.status === "Out For Delivery").length;
-  const deliveredCount = shipments.filter(s => s.status === "Delivered").length;
-  const cancelledCount = shipments.filter(s => s.status === "Cancelled" || s.status === "Returned").length;
+  // Combined list of database shipments + packed orders that don't have shipment records
+  const allShipments = React.useMemo(() => {
+    const dbShipmentOrderIds = new Set(shipments.map(s => s.orderId));
+    const pendingOrders = orders.filter(o => {
+      const isPacked = o.orderStatus.toLowerCase() === "packed";
+      return isPacked && !dbShipmentOrderIds.has(o.id);
+    });
 
-  // Filtered list
-  const filteredShipments = shipments.filter(s => {
+    const virtualShipments: Shipment[] = pendingOrders.map(o => ({
+      id: `virtual-${o.id}`,
+      orderId: o.id,
+      orderNumber: o.orderNumber,
+      customerName: o.customerName,
+      customerEmail: o.customerEmail,
+      shippingAddress: o.shippingAddress,
+      courierName: "Awaiting Assignment",
+      trackingNumber: "Awaiting Assignment",
+      status: "Packed",
+      createdAt: o.createdAt,
+      updatedAt: o.createdAt,
+      timeline: [],
+      isVirtual: true
+    }));
+
+    return [...shipments, ...virtualShipments];
+  }, [shipments, orders]);
+
+  // Metrics based on allShipments
+  const pendingCount = allShipments.filter(s => s.status === "Packed" || s.status === "Shipment Pending" || s.status === "Ready For Pickup").length;
+  const shippedCount = allShipments.filter(s => s.status === "In Transit" || s.status === "Picked Up" || s.status === "Out For Delivery").length;
+  const deliveredCount = allShipments.filter(s => s.status === "Delivered").length;
+  const cancelledCount = allShipments.filter(s => s.status === "Cancelled" || s.status === "Returned").length;
+
+  // Filtered list based on allShipments
+  const filteredShipments = allShipments.filter(s => {
     const matchesSearch =
       s.id.toLowerCase().includes(search.toLowerCase()) ||
       (s.orderNumber ? s.orderNumber.toLowerCase().includes(search.toLowerCase()) : false) ||
@@ -286,11 +332,23 @@ export default function AdminShipmentDashboard() {
             <tbody className="divide-y divide-[#1C1C1C] text-zinc-300">
               {filteredShipments.map((s) => (
                 <tr key={s.id} className="hover:bg-[#161616]/50 transition-colors">
-                  <td className="p-4 font-mono font-bold text-accent">{s.id.slice(-6).toUpperCase()}</td>
+                  <td className="p-4 font-mono font-bold text-accent">{s.isVirtual ? "Awaiting" : s.id.slice(-6).toUpperCase()}</td>
                   <td className="p-4 font-mono">{s.orderNumber || s.orderId.slice(-6).toUpperCase()}</td>
                   <td className="p-4">{s.customerName || "Boutique Guest"}</td>
-                  <td className="p-4">{s.courierName}</td>
-                  <td className="p-4 font-mono">{s.trackingNumber}</td>
+                  <td className="p-4">
+                    {s.isVirtual ? (
+                      <span className="italic text-amber-500/80">Not Assigned</span>
+                    ) : (
+                      s.courierName
+                    )}
+                  </td>
+                  <td className="p-4 font-mono">
+                    {s.isVirtual ? (
+                      <span className="italic text-rose-450/80">Awaiting Tracking</span>
+                    ) : (
+                      s.trackingNumber
+                    )}
+                  </td>
                   <td className="p-4">
                     <span className={`px-2 py-0.5 border text-[9px] font-bold uppercase tracking-wider ${
                       s.status === "Delivered" ? "bg-emerald-950/20 text-emerald-400 border-emerald-900/35" : (
@@ -300,37 +358,41 @@ export default function AdminShipmentDashboard() {
                       {s.status}
                     </span>
                   </td>
-                  <td className="p-4 text-zinc-500">{new Date(s.shippingDate || s.createdAt).toLocaleDateString()}</td>
+                  <td className="p-4 text-zinc-500">{s.isVirtual ? "Pending Dispatch" : new Date(s.shippingDate || s.createdAt).toLocaleDateString()}</td>
                   <td className="p-4 text-right flex justify-end space-x-2.5">
-                    <button
-                      onClick={() => setSelectedShipment(s)}
-                      className="p-1.5 border border-[#1F1F1F] hover:bg-zinc-900 transition text-zinc-400 hover:text-white"
-                      title="View Details"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                    </button>
+                    {!s.isVirtual && (
+                      <button
+                        onClick={() => setSelectedShipment(s)}
+                        className="p-1.5 border border-[#1F1F1F] hover:bg-zinc-900 transition text-zinc-400 hover:text-white"
+                        title="View Details"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         setEditingShipment(s);
-                        setEditCourier(COURIER_OPTIONS.includes(s.courierName) ? s.courierName : "Other");
-                        setEditCustomCourier(COURIER_OPTIONS.includes(s.courierName) ? "" : s.courierName);
-                        setEditTracking(s.trackingNumber);
+                        setEditCourier(s.isVirtual ? COURIER_OPTIONS[0] : (COURIER_OPTIONS.includes(s.courierName) ? s.courierName : "Other"));
+                        setEditCustomCourier(s.isVirtual ? "" : (COURIER_OPTIONS.includes(s.courierName) ? "" : s.courierName));
+                        setEditTracking(s.isVirtual ? "" : s.trackingNumber);
                         setEditStatus(s.status);
                         setEditNotes(s.notes || "");
                         setEditEstDate(s.estimatedDeliveryDate ? new Date(s.estimatedDeliveryDate).toISOString().split("T")[0] : "");
                       }}
                       className="p-1.5 border border-[#1F1F1F] hover:bg-zinc-900 transition text-zinc-400 hover:text-white"
-                      title="Edit Shipment"
+                      title={s.isVirtual ? "Assign Courier & Tracking" : "Edit Shipment"}
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      onClick={() => handleDeleteShipment(s.id)}
-                      className="p-1.5 border border-[#1F1F1F] hover:bg-zinc-900 transition text-rose-400 hover:text-rose-500"
-                      title="Delete Shipment"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {!s.isVirtual && (
+                      <button
+                        onClick={() => handleDeleteShipment(s.id)}
+                        className="p-1.5 border border-[#1F1F1F] hover:bg-zinc-900 transition text-rose-400 hover:text-rose-500"
+                        title="Delete Shipment"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
