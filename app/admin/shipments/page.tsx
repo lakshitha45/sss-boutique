@@ -149,7 +149,7 @@ export default function AdminShipmentDashboard() {
     const matchesSearch =
       s.id.toLowerCase().includes(search.toLowerCase()) ||
       (s.orderNumber ? s.orderNumber.toLowerCase().includes(search.toLowerCase()) : false) ||
-      s.trackingNumber.toLowerCase().includes(search.toLowerCase()) ||
+      ((s.trackingNumber || "").toLowerCase().includes(search.toLowerCase())) ||
       (s.customerName ? s.customerName.toLowerCase().includes(search.toLowerCase()) : false);
 
     const matchesCourier = courierFilter === "all" || s.courierName === courierFilter;
