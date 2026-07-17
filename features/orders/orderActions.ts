@@ -102,6 +102,7 @@ export async function changeOrderStatus(
     }
 
     revalidatePath("/admin/orders");
+    revalidatePath("/admin/shipments");
     revalidatePath("/orders");
     return { success: true, order };
   } catch (err) {
